@@ -31,7 +31,7 @@ from fanqie import FanqieManager
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.2102")
+@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+番茄更新监控", "1.2102")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
