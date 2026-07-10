@@ -7,6 +7,9 @@
 - _draw_text 统一使用描边+阴影绘制函数
 - main.py 精简为纯入口代理层
 
+### 修复
+- 修复 No module named 'checkin' 报错：sys.path + __init__.py
+
 ## 1.2 (2026-07-10)
 ### 新增
 - 背景图改为插件 `res/bg.png` 目录，自动等比缩放

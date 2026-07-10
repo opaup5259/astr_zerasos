@@ -1,5 +1,10 @@
-import os, logging
+import os, sys, logging
 from typing import Optional
+
+# 确保插件目录在 Python 路径中（AstrBot 加载时可能未设置）
+_PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
+if _PLUGIN_DIR not in sys.path:
+    sys.path.insert(0, _PLUGIN_DIR)
 
 from astrbot.api.all import *
 from astrbot.api.event import filter as plugin_filter
