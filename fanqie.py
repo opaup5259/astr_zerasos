@@ -281,7 +281,7 @@ class FanqieManager:
             "预设信息已含小说名和链接，回复中不要再重复。"
         )
 
-        preset_prefix = f"小说更新啦！《{novel_title}》{chapter_info['title']}  链接：{chapter_info['full_url']}"
+        preset_prefix = f"小说更新啦！《{novel_title}》{chapter_info['title']}\n链接：{chapter_info['full_url']}"
 
         # ── Provider 获取 ──
         debug.append(f"[AI-DEBUG] persona_id='{self.persona_id}'")
@@ -297,7 +297,7 @@ class FanqieManager:
 
         if not provider:
             debug.append("[AI-DEBUG] ⚠️ 无可用 Provider，回退纯文本")
-            return (f"{preset_prefix} （AI生成失败：无可用Provider）", debug)
+            return (f"{preset_prefix}\n━━━━━━━━━━━━━━\n（AI生成失败：无可用Provider）", debug)
 
         # ── Persona ──
         system_prompt = ""
@@ -320,11 +320,11 @@ class FanqieManager:
                 ct = getattr(res, "completion_text", None)
                 if ct:
                     debug.append(f"[AI-DEBUG] AI 回复长度={len(ct)}")
-                    return (f"{preset_prefix}\n{ct}", debug)
+                    return (f"{preset_prefix}\n━━━━━━━━━━━━━━\n{ct}", debug)
         except Exception as e:
             debug.append(f"[AI-DEBUG] AI 异常: {e}")
 
-        return (f"{preset_prefix}\n（AI生成失败）", debug)
+        return (f"{preset_prefix}\n━━━━━━━━━━━━━━\n（AI生成失败）", debug)
 
     # ── HTML 解析 ─────────────────────────────────
     async def get_page_html_async(self, url: str) -> Optional[str]:
