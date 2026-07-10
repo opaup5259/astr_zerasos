@@ -41,14 +41,20 @@ class FanqieManager:
     # ── 配置解析 ──────────────────────────────────
     def _parse_config(self):
         self.admin_qq = str(self.config.get("admin_qq", "123456789"))
-        self.check_interval_min = int(self.config.get("check_interval", 10))
         self.persona_id = str(self.config.get("persona_id", ""))
 
-        raw_ids = str(self.config.get("novel_ids", "7656265450392669208"))
+        # fanqie 分组配置（WebUI 分组后值嵌套在 fanqie 键下）
+        fc = self.config.get("fanqie", {})
+        if not isinstance(fc, dict):
+            fc = {}
+
+        self.check_interval_min = int(fc.get("check_interval", 10))
+
+        raw_ids = str(fc.get("novel_ids", "7656265450392669208"))
         raw_ids = raw_ids.replace("，", ",")
         self.novel_ids = [n.strip() for n in raw_ids.split(",") if n.strip()]
 
-        raw_summaries = str(self.config.get("novel_summaries", ""))
+        raw_summaries = str(fc.get("novel_summaries", ""))
         self.novel_summaries = {}
         if raw_summaries.strip():
             for part in raw_summaries.split(","):

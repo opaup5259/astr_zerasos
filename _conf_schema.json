@@ -16,26 +16,33 @@
 		"obvious_hint": true,
 		"default": ""
 	},
-	"novel_ids": {
-		"type": "string",
-		"description": "番茄小说ID列表",
-		"hint": "填入小说网页链接末尾的纯数字ID。支持同时监控多本小说，请用英文逗号 (,) 隔开。",
-		"obvious_hint": true,
-		"default": "7656265450392669208"
-	},
-	"check_interval": {
-		"type": "int",
-		"description": "检查间隔时间(分钟)",
-		"hint": "后台自动轮询番茄小说的间隔分钟数（默认 10 分钟）。",
-		"obvious_hint": true,
-		"default": 10
-	},
-	"novel_summaries": {
-		"type": "string",
-		"description": "各小说剧情概要（自定义）",
-		"hint": "格式：novelid:{小说过去剧情概要},novelid2:{概要2}。AI播报时会参考此内容。不同小说ID保存不同概要。",
-		"obvious_hint": true,
-		"default": ""
+	"fanqie": {
+		"type": "object",
+		"description": "番茄更新推送",
+		"hint": "这是用爬虫实现的哈……",
+		"items": {
+			"novel_ids": {
+				"type": "string",
+				"description": "番茄小说ID列表",
+				"hint": "填入小说网页链接末尾的纯数字ID。支持同时监控多本小说，请用英文逗号 (,) 隔开。",
+				"obvious_hint": true,
+				"default": "7656265450392669208"
+			},
+			"check_interval": {
+				"type": "int",
+				"description": "检查间隔时间(分钟)",
+				"hint": "后台自动轮询番茄小说的间隔分钟数（默认 10 分钟）。",
+				"obvious_hint": true,
+				"default": 10
+			},
+			"novel_summaries": {
+				"type": "string",
+				"description": "各小说剧情概要（自定义）",
+				"hint": "格式：novelid:{小说过去剧情概要},novelid2:{概要2}。AI播报时会参考此内容。不同小说ID保存不同概要。",
+				"obvious_hint": true,
+				"default": ""
+			}
+		}
 	},
 	"kb_names": {
 		"type": "list",
