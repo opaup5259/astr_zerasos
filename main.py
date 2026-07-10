@@ -22,16 +22,17 @@ importlib.invalidate_caches()
 
 # 热重载时踢掉内存中的旧模块缓存，强制从 .py 重新导入
 for _mod in list(sys.modules.keys()):
-    if _mod in ('checkin', 'fanqie') or _mod.startswith('checkin.') or _mod.startswith('fanqie.'):
+    if _mod in ('checkin', 'fanqie', 'bqb') or _mod.startswith('checkin.') or _mod.startswith('fanqie.') or _mod.startswith('bqb.'):
         del sys.modules[_mod]
 
 from checkin import CheckinManager
 from fanqie import FanqieManager
+from bqb import BqbManager
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+番茄更新监控", "1.2102")
+@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+番茄监控+表情包", "1.3101")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
@@ -65,6 +66,13 @@ class ZerasosPlugin(Star):
         )
         self.fm.start_background_loop()
 
+        # ── BQB ──
+        self.bqb = BqbManager(
+            data_dir=data_dir,
+            config=self.config,
+            context=context,
+        )
+
     # =================== 字体查找 ===================
     @staticmethod
     def _find_font() -> Optional[str]:
@@ -95,18 +103,35 @@ class ZerasosPlugin(Star):
             admin_qq=str(self.config.get("admin_qq", "")),
         )
         self.fm.on_config_update(self.config)
+        self.bqb.on_config_update(self.config)
 
     def terminate(self):
         self.fm.terminate()
 
-    # =================== on_message（签到触发） ===================
+    # =================== on_message（签到+表情包） ===================
     @plugin_filter.event_message_type(EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):
+        text = event.message_str.strip()
+        has_images = bool(self.bqb._extract_images(event))
+
+        # ── BQB：有图则概率偷取 ──
+        if has_images:
+            await self.bqb.maybe_steal(event)
+
+        # 工具：BQB 概率发送
+        async def _try_bqb_send():
+            if not has_images and not text.startswith("/"):
+                bqb_path = await self.bqb.maybe_send(event, text)
+                if bqb_path:
+                    yield event.image_result(bqb_path)
+
+        # ── 签到逻辑 ──
         if not self.cm.enable_checkin:
+            async for r in _try_bqb_send():
+                yield r
             return
 
         self.cm.clear_debug()
-        text = event.message_str.strip()
         uid = self.cm._uid(event)
         is_admin = (uid == self.cm.admin_qq)
 
@@ -120,6 +145,8 @@ class ZerasosPlugin(Star):
         if trigger_type is None:
             if self.cm.debug_mode and is_admin:
                 yield event.plain_result(self.cm.debug_result())
+            async for r in _try_bqb_send():
+                yield r
             return
 
         if trigger_type == "soft" and event.is_at_or_wake_command:
@@ -173,23 +200,29 @@ class ZerasosPlugin(Star):
                 "📖 泽拉索斯帮助\n"
                 "━━━━━━━━━━━━━━\n"
                 "签到\n"
-                "  /zra checkin        手动签到\n"
-                "  /签到 /打卡 早安等  关键词自动签到\n"
+                "  /zra checkin          手动签到\n"
+                "  /签到 /打卡 早安等    关键词自动签到\n"
+                "\n"
+                "表情包\n"
+                "  /zra bqb list [页]    查看表情包列表\n"
+                "  /zra bqb get <id>     获取指定表情包\n"
                 "\n"
                 "管理（需管理员QQ）\n"
-                "  /zra list [页数]    签到排行榜\n"
-                "  /zra search <QQ>    查询指定用户签到\n"
-                "  /zra reset confirm force  重置签到\n"
+                "  /zra list [页数]      签到排行榜\n"
+                "  /zra search <QQ>      查询指定用户签到\n"
+                "  /zra reset force      重置签到\n"
+                "  /zra bqb remove <id>  删除表情包\n"
+                "  /zra bqb add +图片    手动添加表情包\n"
                 "\n"
                 "番茄小说监控（管理员）\n"
-                "  /zra fanqie force   强制检查并播报\n"
-                "  /zra fanqie add     绑定当前群为推送目标\n"
-                "  /zra fanqie del     移出推送\n"
-                "  /zra fanqie list    查看推送群聊\n"
-                "  /zra fanqie reset   清空章节缓存\n"
-                "  /zra fanqie get_umo 获取当前群标识\n"
+                "  /zra fanqie force     强制检查并播报\n"
+                "  /zra fanqie add       绑定当前群为推送目标\n"
+                "  /zra fanqie del       移出推送\n"
+                "  /zra fanqie list      查看推送群聊\n"
+                "  /zra fanqie reset     清空章节缓存\n"
+                "  /zra fanqie get_umo   获取当前群标识\n"
                 "\n"
-                "WebUI 配置签到/番茄参数"
+                "WebUI 配置签到/番茄/表情包参数"
             )
             return
 
@@ -285,6 +318,60 @@ class ZerasosPlugin(Star):
 
             else:
                 yield event.plain_result("用法: /zra fanqie <force|add|del|list|reset|get_umo>")
+            return
+
+        # ── bqb ──
+        if subcmd == "bqb" and len(parts) >= 3:
+            bcmd = parts[2].lower()
+
+            if bcmd == "list":
+                page = int(parts[3]) if len(parts) >= 4 and parts[3].isdigit() else 1
+                items = self.bqb.list_bqb(page)
+                if not items:
+                    yield event.plain_result(f"第 {page} 页没有数据（共 {self.bqb.total_pages()} 页）。")
+                    return
+                lines = [f"表情包列表 第{page}/{self.bqb.total_pages()}页"]
+                for item in items:
+                    tags = ",".join(item.get("tags", []))
+                    lines.append(f"[{item['id']}]|{tags}|{item.get('time','')}")
+                yield event.plain_result("\n".join(lines))
+
+            elif bcmd == "remove":
+                if len(parts) < 4 or not parts[3].isdigit():
+                    yield event.plain_result("用法: /zra bqb remove <id>")
+                    return
+                num = int(parts[3])
+                if self.bqb.remove_bqb(num):
+                    yield event.plain_result(f"✅ 已删除表情包 #{num}")
+                else:
+                    yield event.plain_result(f"❌ 未找到表情包 #{num}")
+
+            elif bcmd == "get":
+                if len(parts) < 4 or not parts[3].isdigit():
+                    yield event.plain_result("用法: /zra bqb get <id>")
+                    return
+                num = int(parts[3])
+                path = self.bqb.get_bqb_path(num)
+                if path:
+                    yield event.image_result(path)
+                else:
+                    yield event.plain_result(f"❌ 未找到表情包 #{num}")
+
+            elif bcmd == "add":
+                # 从消息中提取图片
+                urls = self.bqb._extract_images(event)
+                if not urls:
+                    yield event.plain_result("请同时发送图片。用法: 发送带图消息 + /zra bqb add")
+                    return
+                added = 0
+                for url in urls[:3]:
+                    bqb_id = await self.bqb.add_bqb(url, source_info="手动添加")
+                    if bqb_id:
+                        added += 1
+                yield event.plain_result(f"✅ 已添加 {added} 张表情包")
+
+            else:
+                yield event.plain_result("用法: /zra bqb <list|add|remove|get>")
             return
 
         # ── 未知子指令 ──
