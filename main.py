@@ -1,4 +1,4 @@
-import os, json, random, io, re, shutil
+﻿import os, json, random, io, re, shutil
 from datetime import date, timedelta
 from typing import Optional
 import logging
@@ -17,7 +17,7 @@ except ImportError:
     HAS_AIOHTTP = False
 
 try:
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw, ImageFont, ImageFilter
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
@@ -256,6 +256,7 @@ class ZerasosPlugin(Star):
             w, h = 800, 400
             if os.path.exists(self.bg_path):
                 bg = Image.open(self.bg_path).resize((w, h), Image.LANCZOS)
+                bg = bg.filter(ImageFilter.GaussianBlur(radius=12))
             else:
                 bg = Image.new("RGB", (w, h), (30, 30, 50))
             draw = ImageDraw.Draw(bg)
@@ -271,6 +272,9 @@ class ZerasosPlugin(Star):
             ft_large = _font(64)
             ft_medium = _font(42)
             ft_small = _font(30)
+
+            def _draw_text(xy, text, fill, font, stroke_fill=(0,0,0,180), stroke_w=3):
+                draw.text(xy, text, fill=fill, font=font, stroke_width=stroke_w, stroke_fill=stroke_fill)
 
             avatar_size = min(w // 3 - 40, h - 80)
             ax = (w // 3 - avatar_size) // 2
