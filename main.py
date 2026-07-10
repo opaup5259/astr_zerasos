@@ -20,28 +20,31 @@ from astrbot.api.star import StarTools
 
 importlib.invalidate_caches()
 
-# 热重载时检查：如果 checkin 模块还在 sys.modules 里，踢掉它强制重载
+# 热重载时踢掉内存中的旧模块缓存，强制从 .py 重新导入
 for _mod in list(sys.modules.keys()):
-    if _mod == 'checkin' or _mod.startswith('checkin.'):
+    if _mod in ('checkin', 'fanqie') or _mod.startswith('checkin.') or _mod.startswith('fanqie.'):
         del sys.modules[_mod]
 
 from checkin import CheckinManager
+from fanqie import FanqieManager
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.1317")
+@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.2101")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
         self.config = config or {}
-        enable_checkin = bool(self.config.get("enable_checkin", True))
-        debug_mode = bool(self.config.get("debug_mode", False))
-        admin_qq = str(self.config.get("admin_qq", ""))
 
+        # ── data_dir ──
         data_dir = str(StarTools.get_data_dir("zerasos_bot"))
         os.makedirs(data_dir, exist_ok=True)
 
+        # ── Checkin ──
+        enable_checkin = bool(self.config.get("enable_checkin", True))
+        debug_mode = bool(self.config.get("debug_mode", False))
+        admin_qq = str(self.config.get("admin_qq", ""))
         bg_path = os.path.join(PLUGIN_DIR, "res", "bg.png")
         font_path = self._find_font()
 
@@ -53,6 +56,14 @@ class ZerasosPlugin(Star):
             debug_mode=debug_mode,
             enable_checkin=enable_checkin,
         )
+
+        # ── Fanqie ──
+        self.fm = FanqieManager(
+            data_dir=data_dir,
+            config=self.config,
+            context=context,
+        )
+        self.fm.start_background_loop()
 
     # =================== 字体查找 ===================
     @staticmethod
@@ -83,6 +94,10 @@ class ZerasosPlugin(Star):
             debug_mode=bool(self.config.get("debug_mode", False)),
             admin_qq=str(self.config.get("admin_qq", "")),
         )
+        self.fm.on_config_update(self.config)
+
+    def terminate(self):
+        self.fm.terminate()
 
     # =================== on_message（签到触发） ===================
     @plugin_filter.event_message_type(EventMessageType.ALL)
@@ -182,6 +197,78 @@ class ZerasosPlugin(Star):
     @command("checkin reset")
     async def checkin_reset(self, event: AstrMessageEvent):
         yield event.plain_result("旧指令已迁移，请使用: /zra checkin reset confirm force")
+
+    # =================== 番茄小说 ===================
+    @command("fanqie")
+    async def fanqie_router(self, event: AstrMessageEvent):
+        sender = str(event.message_obj.sender.user_id)
+        if sender != self.config.get("admin_qq", ""):
+            return
+
+        text = event.message_str.strip()
+        parts = text.split()
+        if len(parts) < 2:
+            yield event.plain_result("用法: /fanqie <force|add|del|list|reset|get_umo|help>")
+            return
+
+        subcmd = parts[1].lower()
+
+        if subcmd == "force":
+            yield event.plain_result(f"强制拉取 {len(self.fm.novel_ids)} 本番茄小说...")
+            debug_msg, preview_msg = await self.fm.do_check_and_notify(is_debug=True)
+            yield event.plain_result(debug_msg)
+            if preview_msg:
+                yield event.plain_result("【播报预览】\n" + preview_msg)
+
+        elif subcmd in ("add", "del"):
+            target_id = " ".join(parts[2:]).strip() if len(parts) >= 3 else ""
+            target_umo = target_id or event.unified_msg_origin
+            if subcmd == "add":
+                if target_umo not in self.fm.data["target_groups"]:
+                    self.fm.data["target_groups"].append(target_umo)
+                    await self.fm._save_data()
+                    yield event.plain_result(f"✅ 已添加 '{target_umo}'")
+                else:
+                    yield event.plain_result(f"⚠️ 已在列表中")
+            else:
+                if target_umo in self.fm.data["target_groups"]:
+                    self.fm.data["target_groups"].remove(target_umo)
+                    await self.fm._save_data()
+                    yield event.plain_result(f"✅ 已移除 '{target_umo}'")
+                else:
+                    yield event.plain_result(f"⚠️ 不在列表中")
+
+        elif subcmd == "list":
+            groups = self.fm.data.get("target_groups", [])
+            if not groups:
+                yield event.plain_result("推送列表为空。\n💡 在目标群发送 /fanqie add 即可绑定")
+            else:
+                res = "当前推送群聊 (UMO) 列表:\n" + "\n".join(f"- {g}" for g in groups)
+                yield event.plain_result(res)
+
+        elif subcmd == "reset":
+            self.fm.data["chapter_states"] = {}
+            self.fm.data["chapter_history"] = {}
+            await self.fm._save_data()
+            yield event.plain_result("✅ 已清除所有章节缓存，下次拉取必定播报")
+
+        elif subcmd == "get_umo":
+            yield event.plain_result(
+                f"✅ 当前底层标识 (UMO):\n{event.unified_msg_origin}\n\n"
+                f"💡 用 /fanqie add 绑定即可 100% 投递"
+            )
+
+        elif subcmd == "help":
+            yield event.plain_result(
+                "📖 番茄监控帮助\n"
+                "1. /fanqie force - 强制检查并播报\n"
+                "2. /fanqie list - 查看推送群聊\n"
+                "3. /fanqie add [群号] - 在目标群发送即可绑定\n"
+                "4. /fanqie del [群号] - 移除推送\n"
+                "5. /fanqie reset - 清空历史记录\n"
+                "6. /fanqie get_umo - 获取当前群标识\n"
+                "7. /fanqie help - 本帮助"
+            )
 
     # =================== 工具 ===================
     @staticmethod
