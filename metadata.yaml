@@ -1,6 +1,6 @@
 name: zerasos_bot
 desc: 泽拉索斯多功能插件 —— 签到、信仰值等个性化功能
 help: "发送 签到/打卡/早安/早上好/安安/晚安/早安/日安/早/安 进行每日签到。管理员发送 /checkin reset confirm force 重置数据。"
-version: "1.1202"
+version: "1.1203"
 author: "opaup"
 repo: "https://github.com/opaup5259/astr_zerasos.git"
