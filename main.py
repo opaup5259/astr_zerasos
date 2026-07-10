@@ -32,7 +32,7 @@ from bqb import BqbManager
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+番茄监控+表情包", "1.3102")
+@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+番茄监控+表情包", "1.3103")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
@@ -213,6 +213,7 @@ class ZerasosPlugin(Star):
                 "  /zra reset force      重置签到\n"
                 "  /zra bqb remove <id>  删除表情包\n"
                 "  /zra bqb modify <id> <标签>  修改表情包标签\n"
+                "  /zra bqb remake <id>   重新用AI生成标签\n"
                 "  /zra bqb add +图片    手动添加表情包\n"
                 "\n"
                 "番茄小说监控（管理员）\n"
@@ -382,8 +383,22 @@ class ZerasosPlugin(Star):
                 else:
                     yield event.plain_result(f"❌ 未找到表情包 #{num}")
 
+            elif bcmd == "remake":
+                if len(parts) < 4 or not parts[3].isdigit():
+                    yield event.plain_result("用法: /zra bqb remake <id>")
+                    return
+                num = int(parts[3])
+                yield event.plain_result(f"⏳ 正在重新分析表情包 #{num}...")
+                ok = await self.bqb.remake_bqb_tags(num)
+                if ok:
+                    item = self.bqb.get_bqb(num)
+                    tags = ",".join(item.get("tags", []))
+                    yield event.plain_result(f"✅ 已更新标签: {tags}")
+                else:
+                    yield event.plain_result(f"❌ 未找到表情包 #{num}")
+
             else:
-                yield event.plain_result("用法: /zra bqb <list|add|remove|get|modify>")
+                yield event.plain_result("用法: /zra bqb <list|add|remove|get|modify|remake>")
             return
 
         # ── 未知子指令 ──
