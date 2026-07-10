@@ -135,17 +135,16 @@ class FanqieManager:
         all_preview = []
 
         for novel_id in self.novel_ids:
-            target_url = f"{BASE_URL}/page/{novel_id}"
-            html = await self.get_page_html_async(target_url)
+            info = await self.fetch_novel_info(novel_id)
 
-            if not html:
-                all_debug.append(f"[Debug] ID:{novel_id} 抓取失败")
+            if not info or not info["chapter_info"]["id"]:
+                all_debug.append(f"[Debug] ID:{novel_id} 获取信息失败")
                 continue
 
-            novel_title, volume_name, chapter_info, novel_abstract = self.parse_directory_page(html)
-            if not volume_name or not chapter_info["id"]:
-                all_debug.append(f"[Debug] ID:{novel_id} 未找到章节节点")
-                continue
+            novel_title = info["title"]
+            volume_name = info["volume_name"]
+            chapter_info = info["chapter_info"]
+            novel_abstract = info["abstract"]
 
             local_state = self.data["chapter_states"].get(novel_id, {})
             local_chapter_id = local_state.get("chapter_id", "")
@@ -333,93 +332,150 @@ class FanqieManager:
         return (f"{preset_prefix}\n━━━━━━━━━━━━━━\n（AI生成失败）", debug)
 
     # ── HTML 解析 ─────────────────────────────────
-    async def get_page_html_async(self, url: str) -> Optional[str]:
+    # ── HTTP 请求（通用） ──────────────────────────
+    async def _http_get(self, url: str, headers: dict = None, expect_json=False):
         if not HAS_AIOHTTP:
-            return None
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            return {} if expect_json else None
+        default_headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        if headers:
+            default_headers.update(headers)
         async with aiohttp.ClientSession() as session:
             try:
-                async with session.get(url, headers=headers, timeout=10) as resp:
+                async with session.get(url, headers=default_headers, timeout=15) as resp:
                     resp.raise_for_status()
+                    ct = resp.headers.get("Content-Type", "")
+                    if expect_json or "application/json" in ct:
+                        return await resp.json(content_type=None)
                     return await resp.text()
             except Exception as e:
-                logging.error(f"[爬虫] 请求失败: {e}")
+                logging.error(f"[爬虫] 请求失败 {url}: {e}")
+                return {} if expect_json else None
+
+    @staticmethod
+    def _extract_initial_state(html: str) -> Optional[dict]:
+        import re as _re
+        m = _re.search(r"window\.__INITIAL_STATE__\s*=\s*({.*?});", html, _re.DOTALL)
+        if m:
+            try:
+                return json.loads(m.group(1))
+            except json.JSONDecodeError as e:
+                logging.error(f"[解析] __INITIAL_STATE__ JSON 解析失败: {e}")
                 return None
+        logging.warning("[解析] 未找到 __INITIAL_STATE__")
+        return None
 
-    def parse_directory_page(self, html_content):
-        if not HAS_BS4:
-            return "未知小说", None, None, ""
-        soup = BeautifulSoup(html_content, "html.parser")
-        novel_title, volume_name = "未知小说", "默认卷"
+    async def fetch_novel_info(self, novel_id: str) -> Optional[dict]:
+        dir_url = f"{BASE_URL}/api/reader/directory/detail?bookId={novel_id}"
+        dir_data = await self._http_get(dir_url, expect_json=True)
+        if not dir_data or not isinstance(dir_data, dict):
+            return None
+
+        data = dir_data.get("data", {})
+        vol_names = data.get("volumeNameList", ["默认卷"])
+        chapters_by_vol = data.get("chapterListWithVolume", [])
+
+        last_vol_chapters = chapters_by_vol[-1] if chapters_by_vol else []
+        last_ch = last_vol_chapters[-1] if isinstance(last_vol_chapters, list) and last_vol_chapters else {}
+
+        volume_name = vol_names[-1] if vol_names else "默认卷"
+        chapter_info = {
+            "title": last_ch.get("title", ""),
+            "id": last_ch.get("itemId", ""),
+            "needPay": last_ch.get("needPay", 0),
+            "isChapterLock": last_ch.get("isChapterLock", False),
+            "full_url": f"{BASE_URL}/reader/{last_ch.get('itemId', '')}",
+        }
+
+        novel_title = "未知小说"
         novel_abstract = ""
-        chapter_info = {"title": "", "href": "", "full_url": "", "id": ""}
+        first_item_id = last_ch.get("itemId", "")
+        if chapters_by_vol:
+            first_vol = chapters_by_vol[0]
+            if isinstance(first_vol, list) and first_vol:
+                first_item_id = first_vol[0].get("itemId", first_item_id)
 
-        title_tag = soup.find("h1") or soup.find("div", class_=lambda c: c and "info-name" in c)
-        if title_tag:
-            novel_title = title_tag.get_text(strip=True)
+        if first_item_id:
+            reader_url = f"{BASE_URL}/reader/{first_item_id}"
+            html = await self._http_get(reader_url)
+            if html:
+                state = self._extract_initial_state(html)
+                if state:
+                    page_data = state.get("page", {})
+                    reader_data = state.get("reader", {})
+                    ch_data = reader_data.get("chapterData", {}) if isinstance(reader_data, dict) else {}
 
-        abstract_div = soup.find("div", class_="page-abstract-content")
-        if abstract_div:
-            novel_abstract = abstract_div.get_text(strip=True)
+                    # Try page.bookName first, then reader.chapterData.bookName
+                    if page_data.get("bookName"):
+                        novel_title = page_data["bookName"]
+                    elif isinstance(ch_data, dict) and ch_data.get("bookName"):
+                        novel_title = ch_data["bookName"]
 
-        dir_cont = soup.find("div", class_="page-directory-content")
-        if not dir_cont:
-            return novel_title, None, None, novel_abstract
+                    if page_data.get("abstract"):
+                        novel_abstract = page_data["abstract"]
 
-        blocks = dir_cont.find_all("div", recursive=False)
-        if not blocks:
-            return novel_title, None, None, novel_abstract
+                # Fallback: extract from HTML <title> and <meta>
+                if novel_title == "未知小说":
+                    import re as _re
+                    t_match = _re.search(r"<title>(.*?)</title>", html, _re.DOTALL)
+                    if t_match:
+                        raw = t_match.group(1).strip()
+                        idx = raw.find("第")
+                        if idx > 0:
+                            novel_title = raw[:idx].strip()
+                        else:
+                            novel_title = raw.split("第")[0].strip()
 
-        last_block = blocks[-1]
-        v_elem = last_block.find("div", class_=lambda c: c and "volume" in c)
-        if v_elem and v_elem.contents:
-            volume_name = str(v_elem.contents[0]).strip()
+                if not novel_abstract:
+                    import re as _re
+                    m_match = _re.search(r'"description"\s+content="([^"]+)"', html)
+                    if m_match:
+                        novel_abstract = m_match.group(1)[:300]
 
-        c_cont = last_block.find("div", class_="chapter")
-        if c_cont:
-            c_items = c_cont.find_all("div", class_="chapter-item")
-            if c_items:
-                link = c_items[-1].find("a", class_="chapter-item-title")
-                if link:
-                    chapter_info["title"] = link.get_text(strip=True)
-                    chapter_info["href"] = link.get("href") or ""
-                    chapter_info["id"] = chapter_info["href"].split("/")[-1]
-                    chapter_info["full_url"] = f"{BASE_URL}{chapter_info['href']}"
-
-        return novel_title, volume_name, chapter_info, novel_abstract
+        return {
+            "title": novel_title,
+            "abstract": novel_abstract,
+            "volume_name": volume_name,
+            "chapter_info": chapter_info,
+        }
 
     async def fetch_chapter_detail_async(self, url: str) -> dict:
-        html = await self.get_page_html_async(url)
+        html = await self._http_get(url)
         if not html:
             return {"content": None, "update_time": "未知时间", "chapter_title": "", "word_count": ""}
 
-        soup = BeautifulSoup(html, "html.parser")
-        update_time = "未知时间"
-        t_span = soup.find(lambda t: t.name == "span" and "更新时间" in t.get_text())
-        if t_span:
-            update_time = t_span.get_text(strip=True).replace("更新时间：", "").replace("更新时间:", "").strip()
+        state = self._extract_initial_state(html)
+        if not state:
+            return {"content": None, "update_time": "未知时间", "chapter_title": "", "word_count": ""}
 
-        chapter_title = ""
-        title_tag = soup.find("h1", class_="muye-reader-title")
-        if title_tag:
-            chapter_title = title_tag.get_text(strip=True)
+        reader_data = state.get("reader", {})
+        chapter_data = reader_data.get("chapterData", {}) if isinstance(reader_data, dict) else {}
 
-        word_count = ""
-        for span in soup.find_all("span", class_="desc-item"):
-            text = span.get_text(strip=True)
-            if "字数" in text:
-                word_count = text.replace("本章字数：", "").replace("本章字数:", "").strip()
-
+        content_html = chapter_data.get("content", "")
         lines = []
-        c_div = soup.find("div", class_=re.compile(r"muye-reader-content"))
-        if c_div:
-            for p in c_div.find_all("p"):
+        if HAS_BS4 and content_html:
+            soup = BeautifulSoup(content_html, "html.parser")
+            for p in soup.find_all("p"):
                 if text := p.get_text(strip=True):
                     lines.append(text)
+        elif content_html:
+            import re as _re
+            for m in _re.finditer(r"<p[^>]*>(.*?)</p>", content_html, _re.DOTALL):
+                text = _re.sub(r"<[^>]+>", "", m.group(1)).strip()
+                if text:
+                    lines.append(text)
+
+        page_data = state.get("page", {}) if isinstance(state, dict) else {}
+        update_time = page_data.get("lastPublishTime", "未知时间")
+
+        chapter_title = chapter_data.get("title", "")
+        if not chapter_title:
+            chapter_title = page_data.get("lastChapterTitle", "")
+
+        word_count = ""
 
         return {
             "content": "\n\n".join(lines),
-            "update_time": update_time,
+            "update_time": str(update_time),
             "chapter_title": chapter_title,
             "word_count": word_count,
         }

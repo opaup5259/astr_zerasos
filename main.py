@@ -224,7 +224,7 @@ class ZerasosPlugin(Star):
                 "  /zra fanqie reset     清空章节缓存\n"
                 "  /zra fanqie get_umo   获取当前群标识\n"
                 "\n"
-                "WebUI 配置签到/番茄/表情包参数"
+                "WebUI 配置签到/番茄/表情包参数\n"
             )
             return
 
