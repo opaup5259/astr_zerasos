@@ -1,4 +1,4 @@
-import os, json, random, io, re, shutil
+﻿import os, json, random, io, re, shutil
 from datetime import date, timedelta
 from typing import Optional
 import logging
@@ -36,7 +36,7 @@ SINGLE_SAFE  = _re.compile(r"^安$")
 # =======================================================
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.1201")
+@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.1202")
 class ZerasosPlugin(Star):
     """泽拉索斯 —— 集签到、信仰值等个性化功能于一体的 AstrBot 插件"""
 
