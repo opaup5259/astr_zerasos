@@ -4,10 +4,16 @@
 		"description": "启用签到功能",
 		"default": true
 	},
-	"enable_bqb": {
+	"enable_bqb_send": {
 		"type": "bool",
-		"description": "启用表情包功能",
-		"hint": "关闭后不再偷取和发送表情包",
+		"description": "自动发表情包",
+		"hint": "日常闲聊时概率发送已保存的表情包",
+		"default": true
+	},
+	"enable_bqb_steal": {
+		"type": "bool",
+		"description": "自动偷表情包",
+		"hint": "开启后，看到好图会概率保存到表情包库",
 		"default": true
 	},
 	"debug_mode": {

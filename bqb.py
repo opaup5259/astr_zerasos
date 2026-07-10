@@ -27,7 +27,8 @@ class BqbManager:
     def __init__(self, *, data_dir: str, config: dict, context):
         self.config = config or {}
         self.context = context
-        self.enabled = bool(self.config.get("enable_bqb", True))
+        self.send_enabled = bool(self.config.get("enable_bqb_send", True))
+        self.steal_enabled = bool(self.config.get("enable_bqb_steal", True))
 
         self.bqb_dir = os.path.join(data_dir, "bqb")
         os.makedirs(self.bqb_dir, exist_ok=True)
@@ -279,6 +280,10 @@ class BqbManager:
         if not self.enabled:
             return False
 
+        # 偷取开关
+        if not self.steal_enabled:
+            return False
+
         # 只处理带图片的消息
         image_urls = self._extract_images(event)
         if not image_urls:
@@ -313,7 +318,7 @@ class BqbManager:
         日常闲聊时概率选择表情包。
         返回图片路径（触发发送），或 None（不发送）。
         """
-        if not self.enabled or not self.index:
+        if not self.send_enabled or not self.index:
             return None
 
         try:
@@ -379,4 +384,5 @@ class BqbManager:
     # ── 配置更新 ────────────────────────────────
     def on_config_update(self, config: dict):
         self.config = config or {}
-        self.enabled = bool(self.config.get("enable_bqb", True))
+        self.send_enabled = bool(self.config.get("enable_bqb_send", True))
+        self.steal_enabled = bool(self.config.get("enable_bqb_steal", True))
