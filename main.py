@@ -36,7 +36,7 @@ SINGLE_SAFE  = _re.compile(r"^安$")
 # =======================================================
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.10401")
+@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.12")
 class ZerasosPlugin(Star):
     """泽拉索斯 —— 集签到、信仰值等个性化功能于一体的 AstrBot 插件"""
 
@@ -46,6 +46,10 @@ class ZerasosPlugin(Star):
 
         # ---- 功能开关 ----
         self.enable_checkin = bool(self.config.get("enable_checkin", True))
+        self.debug_mode = bool(self.config.get("debug_mode", False))
+
+        if self.debug_mode:
+            logging.info(f"[泽拉索斯-DEBUG] 插件启动，签到: {'开启' if self.enable_checkin else '关闭'}，管理员: {self.admin_qq}")
 
         # ---- 管理员 ----
         self.admin_qq = str(self.config.get("admin_qq", ""))
@@ -70,8 +74,9 @@ class ZerasosPlugin(Star):
         """WebUI 修改配置后的热重载"""
         self.config = config or {}
         self.enable_checkin = bool(self.config.get("enable_checkin", True))
+        self.debug_mode = bool(self.config.get("debug_mode", False))
         self.admin_qq = str(self.config.get("admin_qq", ""))
-        logging.info(f"[泽拉索斯] 配置已热重载。签到: {'开启' if self.enable_checkin else '关闭'}")
+        logging.info(f"[泽拉索斯] 配置已热重载。签到: {'开启' if self.enable_checkin else '关闭'}，Debug: {'开启' if self.debug_mode else '关闭'}")
 
     # ======================== 工具方法 ========================
 
@@ -189,19 +194,34 @@ class ZerasosPlugin(Star):
             return
 
         text = event.message_str.strip()
+        if self.debug_mode:
+            logging.info(f"[泽拉索斯-DEBUG] 收到消息: '{text}' | is_at_or_wake: {event.is_at_or_wake_command}")
+
         trigger_type = self._is_checkin_trigger(text)
+        if self.debug_mode:
+            logging.info(f"[泽拉索斯-DEBUG] 关键词检测: '{text}' → {trigger_type or '未匹配'}")
+
         if trigger_type is None:
             return
 
         # 软触发时，跳过 @bot / 唤醒消息（避免和 LLM 重复响应）
         if trigger_type == "soft" and event.is_at_or_wake_command:
+            if self.debug_mode:
+                logging.info(f"[泽拉索斯-DEBUG] 软触发被跳过：is_at_or_wake_command=True")
             return
 
         uid = self._uid(event)
         if not uid:
+            if self.debug_mode:
+                logging.warning(f"[泽拉索斯-DEBUG] 无法提取 UID")
             return
         if uid == self.admin_qq:
-            return  # 管理员走指令
+            if self.debug_mode:
+                logging.info(f"[泽拉索斯-DEBUG] 管理员消息跳过")
+            return
+
+        if self.debug_mode:
+            logging.info(f"[泽拉索斯-DEBUG] 触发签到: uid={uid}, type={trigger_type}")
 
         async for result in self._process_checkin(event, uid, trigger_type):
             yield result
@@ -224,6 +244,9 @@ class ZerasosPlugin(Star):
         today = self._today()
         user_data = self._ensure_user(uid)
         already = user_data["last_checkin_date"] == today
+
+        if self.debug_mode:
+            logging.info(f"[泽拉索斯-DEBUG] 签到处理: uid={uid}, already={already}, faith={user_data['faith_points']}, streak={user_data['streak']}")
 
         if already:
             # --- 已签到 ---
@@ -259,8 +282,12 @@ class ZerasosPlugin(Star):
         nickname = self._nickname(event)
         card_path = await self._generate_card(uid, nickname, user_data)
         if card_path:
+            if self.debug_mode:
+                logging.info(f"[泽拉索斯-DEBUG] 图片已生成: {card_path}")
             yield event.image_result(card_path)
         else:
+            if self.debug_mode:
+                logging.warning(f"[泽拉索斯-DEBUG] 图片生成失败，降级文字回复")
             # PIL 不可用时的文字兜底
             yield event.plain_result(
                 f"签到成功！信仰值 +{points}，累计签到 {user_data['total_checkins']} 天"

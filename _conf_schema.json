@@ -4,6 +4,11 @@
 		"description": "启用签到功能",
 		"default": true
 	},
+	"debug_mode": {
+		"type": "bool",
+		"description": "调试模式：输出详细日志方便排查问题",
+		"default": false
+	},
 	"admin_qq": {
 		"type": "string",
 		"description": "管理员 QQ 号",
