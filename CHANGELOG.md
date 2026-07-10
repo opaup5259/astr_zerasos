@@ -1,5 +1,9 @@
 # 更新日志
 
+## 1.102 (2026-07-10)
+### 修复
+- 修正 filter 导入为 `from astrbot.api.event import filter`（filter 是子包，不是包内名称）
+
 ## 1.101 (2026-07-10)
 ### 修复
 - 修复 `filter` 导入路径错误：改为 `from astrbot.api.event.filter import filter`
