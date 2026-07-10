@@ -240,13 +240,10 @@ class ZerasosPlugin(Star):
 
             if fcmd == "force":
                 debug_msg, preview_msg = await self.fm.do_check_and_notify(is_debug=True)
-                lines = [f"强制拉取 {len(self.fm.novel_ids)} 本番茄小说..."]
                 if debug_msg:
-                    lines.append(debug_msg)
+                    yield event.plain_result(debug_msg)
                 if preview_msg:
-                    lines.append("【播报预览】")
-                    lines.append(preview_msg)
-                yield event.plain_result("\n".join(lines))
+                    yield event.plain_result(preview_msg)
 
             elif fcmd in ("add", "del"):
                 target_id = " ".join(parts[3:]).strip() if len(parts) >= 4 else ""
