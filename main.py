@@ -36,7 +36,7 @@ SINGLE_SAFE  = _re.compile(r"^安$")
 # =======================================================
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.12")
+@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.1201")
 class ZerasosPlugin(Star):
     """泽拉索斯 —— 集签到、信仰值等个性化功能于一体的 AstrBot 插件"""
 
@@ -48,11 +48,11 @@ class ZerasosPlugin(Star):
         self.enable_checkin = bool(self.config.get("enable_checkin", True))
         self.debug_mode = bool(self.config.get("debug_mode", False))
 
-        if self.debug_mode:
-            logging.info(f"[泽拉索斯-DEBUG] 插件启动，签到: {'开启' if self.enable_checkin else '关闭'}，管理员: {self.admin_qq}")
-
         # ---- 管理员 ----
         self.admin_qq = str(self.config.get("admin_qq", ""))
+
+        if self.debug_mode:
+            logging.info(f"[泽拉索斯-DEBUG] 插件启动，签到: {'开启' if self.enable_checkin else '关闭'}，管理员: {self.admin_qq}")
 
         # ---- 持久化数据目录（AstrBot 标准路径，卸载不会自动删除） ----
         self.data_dir = str(StarTools.get_data_dir("zerasos_bot"))
