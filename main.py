@@ -22,8 +22,8 @@ except ImportError:
 
 # ==================== 签到触发关键词 ====================
 
-# 硬关键词：发送即触发签到，无视是否已签到
-HARD_KEYWORDS = {"签到", "打卡"}
+# 硬关键词：发送即触发签到（支持 / 前缀），无视是否已签到
+HARD_KEYWORDS = {"签到", "打卡", "/签到", "/打卡"}
 
 # 软关键词：发送触发签到，但如果今天已签到则静默不回应
 SOFT_KEYWORDS = {"早安", "早上好", "安安", "日安", "午安", "晚安", "晚上好"}
@@ -36,7 +36,7 @@ SINGLE_SAFE  = _re.compile(r"^安$")
 # =======================================================
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.104")
+@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.10401")
 class ZerasosPlugin(Star):
     """泽拉索斯 —— 集签到、信仰值等个性化功能于一体的 AstrBot 插件"""
 
@@ -187,21 +187,24 @@ class ZerasosPlugin(Star):
         """拦截所有消息，检测签到触发词"""
         if not self.enable_checkin:
             return
-        if event.is_at_or_wake_command:
-            return
 
         text = event.message_str.strip()
         trigger_type = self._is_checkin_trigger(text)
         if trigger_type is None:
             return
 
+        # 软触发时，跳过 @bot / 唤醒消息（避免和 LLM 重复响应）
+        if trigger_type == "soft" and event.is_at_or_wake_command:
+            return
+
         uid = self._uid(event)
         if not uid:
             return
         if uid == self.admin_qq:
-            return  # 管理员走 /checkin 指令
+            return  # 管理员走指令
 
-        await self._process_checkin(event, uid, trigger_type)
+        async for result in self._process_checkin(event, uid, trigger_type):
+            yield result
 
     @command("checkin")
     async def checkin_cmd(self, event: AstrMessageEvent):
@@ -212,7 +215,8 @@ class ZerasosPlugin(Star):
         uid = self._uid(event)
         if not uid:
             return
-        await self._process_checkin(event, uid, "hard")
+        async for result in self._process_checkin(event, uid, "hard"):
+            yield result
 
     # ======================== 签到核心逻辑 ========================
 

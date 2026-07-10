@@ -1,5 +1,11 @@
 # 更新日志
 
+## 1.10401 (2026-07-10)
+### 修复
+- 硬关键词增加 `/签到` `/打卡` 支持（带斜杠指令也触发签到）
+- 修复 `await` async generator 导致 yield 被丢弃，签到无响应
+- 软触发保留 `is_at_or_wake_command` 检查，避免与 @bot LLM 重复响应
+
 ## 1.104 (2026-07-10)
 ### 修复
 - `is_at_or_command()` → `is_at_or_wake_command`（属性，不是方法）
