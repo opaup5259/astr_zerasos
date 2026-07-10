@@ -196,20 +196,6 @@ class CheckinManager:
         path = os.path.join(self.temp_dir, f"{uid}.png")
         return path if os.path.exists(path) else None
 
-    def _draw_text(self, draw: ImageDraw.ImageDraw, xy, text, fill, font,
-                   stroke_width: int = 5, stroke_fill=(255, 255, 255),
-                   shadow_offset: int = 2, shadow_fill=(30, 30, 30)):
-        """
-        绘制带黑色阴影 + 白色描边的文字，确保在任何背景上都清晰。
-        """
-        x, y = xy
-        # 黑色阴影（右下偏移）
-        draw.text((x + shadow_offset, y + shadow_offset), text,
-                  fill=shadow_fill, font=font)
-        # 白色描边 + 主色文字
-        draw.text(xy, text, fill=fill, font=font,
-                  stroke_width=stroke_width, stroke_fill=stroke_fill)
-
     async def _generate_card(self, uid: str, nickname: str, user_data: dict) -> Optional[str]:
         if not HAS_PIL:
             return None
@@ -263,29 +249,24 @@ class CheckinManager:
             lx = w // 3
             draw.line([(lx, 30), (lx, h - 30)], fill=(200, 200, 255), width=3)
 
-            # ── 文字（带描边+阴影） ──
+            # ── 文字 ──
             tx, ty, lh = lx + 50, 45, 85
 
+            # @昵称：黑色文字 + 白色阴影（偏移1px确保可读）
             nick_ = nickname[:10] + "..." if len(nickname) > 10 else nickname
             nick_text = f"@{nick_}"
-            # 昵称背景：浅色圆角矩形，确保文字在任何背景上都清晰
-            nbbox = draw.textbbox((0, 0), nick_text, font=ft_medium)
-            nw = nbbox[2] - nbbox[0] + 16
-            nh = nbbox[3] - nbbox[1] + 10
-            nx, ny = tx - 6, ty - 3
-            draw.rounded_rectangle((nx, ny, nx + nw, ny + nh), radius=10, fill=(240, 240, 245))
-            # 纯黑文字，无额外描边
+            draw.text((tx + 1, ty + 1), nick_text, fill=(255, 255, 255), font=ft_medium)
             draw.text((tx, ty), nick_text, fill=(0, 0, 0), font=ft_medium)
 
+            # 信仰值：金色
             pts = user_data.get("today_points", 0)
-            draw.text((tx, ty + lh), f"信仰值 +{pts}", fill=(0, 0, 0), font=ft_large)
+            draw.text((tx, ty + lh), f"信仰值 +{pts}", fill=(255, 215, 0), font=ft_large)
 
+            # 累计/连续签到：淡蓝色
             total = user_data.get("total_checkins", 0)
             streak = user_data.get("streak", 0)
-            self._draw_text(draw, (tx, ty + lh * 2), f"累计签到：{total} 天",
-                            fill=(180, 180, 255), font=ft_medium, stroke_width=4)
-            self._draw_text(draw, (tx, ty + lh * 2 + 80), f"连续签到：{streak} 天",
-                            fill=(180, 180, 255), font=ft_small, stroke_width=4)
+            draw.text((tx, ty + lh * 2), f"累计签到：{total} 天", fill=(180, 180, 255), font=ft_medium)
+            draw.text((tx, ty + lh * 2 + 80), f"连续签到：{streak} 天", fill=(180, 180, 255), font=ft_small)
 
             # ── 右下角总信仰值 ──
             total_faith = user_data.get("faith_points", 0)
@@ -293,9 +274,7 @@ class CheckinManager:
             tiny_txt = f"总信仰值: {total_faith}"
             tbbox = draw.textbbox((0, 0), tiny_txt, font=ft_tiny)
             tw_ = tbbox[2] - tbbox[0]
-            self._draw_text(draw, (w - tw_ - 25, h - 35), tiny_txt,
-                            fill=(200, 200, 200), font=ft_tiny,
-                            stroke_width=3, shadow_offset=1)
+            draw.text((w - tw_ - 25, h - 35), tiny_txt, fill=(200, 200, 200), font=ft_tiny)
 
             bg.save(cache_path, "PNG")
             return cache_path

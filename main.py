@@ -16,7 +16,7 @@ from checkin import CheckinManager
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.1313")
+@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.1314")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
