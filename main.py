@@ -32,7 +32,7 @@ from bqb import BqbManager
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+番茄监控+表情包", "1.3101")
+@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+番茄监控+表情包", "1.3102")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
