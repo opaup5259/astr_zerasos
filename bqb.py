@@ -276,10 +276,6 @@ class BqbManager:
         检查消息是否带图 → 概率偷取 → AI 判断好坏 → 保存。
         返回是否成功偷取。
         """
-        if not self.enabled:
-            return False
-
-        # 偷取开关
         if not self.steal_enabled:
             return False
 
