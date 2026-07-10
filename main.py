@@ -5,6 +5,7 @@ import logging
 
 from astrbot.api.all import *
 from astrbot.api.event import filter as plugin_filter
+from astrbot.api.event.filter import EventMessageType
 from astrbot.api.star import StarTools
 
 try:
@@ -35,7 +36,7 @@ SINGLE_SAFE  = _re.compile(r"^安$")
 # =======================================================
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.102")
+@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.103")
 class ZerasosPlugin(Star):
     """泽拉索斯 —— 集签到、信仰值等个性化功能于一体的 AstrBot 插件"""
 
@@ -181,7 +182,7 @@ class ZerasosPlugin(Star):
 
     # ======================== 消息拦截入口 ========================
 
-    @plugin_filter.on_message()
+    @plugin_filter.event_message_type(EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):
         """拦截所有消息，检测签到触发词"""
         if not self.enable_checkin:

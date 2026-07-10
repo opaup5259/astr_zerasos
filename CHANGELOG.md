@@ -1,5 +1,9 @@
 # 更新日志
 
+## 1.103 (2026-07-10)
+### 修复
+- 修正消息监听装饰器：`on_message` 不存在，正确 API 是 `event_message_type(EventMessageType.ALL)`
+
 ## 1.102 (2026-07-10)
 ### 修复
 - 修正 filter 导入为 `from astrbot.api.event import filter`（filter 是子包，不是包内名称）
