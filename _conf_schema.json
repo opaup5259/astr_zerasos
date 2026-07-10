@@ -1,0 +1,9 @@
+{
+	"admin_qq": {
+		"type": "string",
+		"description": "管理员 QQ 号",
+		"hint": "拥有发送 /checkin 等管理指令的权限，同时管理员自己的消息不会触发重复签到。",
+		"obvious_hint": true,
+		"default": ""
+	}
+}
