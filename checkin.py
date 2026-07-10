@@ -253,8 +253,8 @@ class CheckinManager:
             tx, ty, lh = lx + 50, 45, 85
 
             # @昵称：黑色文字 + 白色阴影（偏移1px确保可读）
-            nick_ = nickname[:10] + "..." if len(nickname) > 10 else nickname
-            nick_text = f"@{nick_}"
+            nick_ = nickname[:7] + "..." if len(nickname) > 7 else nickname
+            nick_text = f"-> {nick_}"
             draw.text((tx + 1, ty + 1), nick_text, fill=(255, 255, 255), font=ft_medium)
             draw.text((tx, ty), nick_text, fill=(0, 0, 0), font=ft_medium)
 
