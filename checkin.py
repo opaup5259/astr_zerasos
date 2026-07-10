@@ -278,7 +278,7 @@ class CheckinManager:
             draw.text((tx, ty), nick_text, fill=(0, 0, 0), font=ft_medium)
 
             pts = user_data.get("today_points", 0)
-            self._draw_text(draw, (tx, ty + lh), f"信仰值 +{pts}", fill=(255, 215, 0), font=ft_large)
+            draw.text((tx, ty + lh), f"信仰值 +{pts}", fill=(0, 0, 0), font=ft_large)
 
             total = user_data.get("total_checkins", 0)
             streak = user_data.get("streak", 0)
