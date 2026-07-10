@@ -223,6 +223,17 @@ class BqbManager:
                 return True
         return False
 
+    def modify_bqb_tags(self, num: int, tags_str: str) -> bool:
+        """手动修改指定表情包的标签（英文逗号分隔）"""
+        for item in self.index:
+            if item["id"] == num:
+                tags = [t.strip() for t in tags_str.split(",") if t.strip()]
+                if tags:
+                    item["tags"] = tags[:MAX_TAGS]
+                    self._save_index()
+                    return True
+        return False
+
     def get_bqb(self, num: int) -> Optional[dict]:
         for item in self.index:
             if item["id"] == num:

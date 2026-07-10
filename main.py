@@ -212,6 +212,7 @@ class ZerasosPlugin(Star):
                 "  /zra search <QQ>      查询指定用户签到\n"
                 "  /zra reset force      重置签到\n"
                 "  /zra bqb remove <id>  删除表情包\n"
+                "  /zra bqb modify <id> <标签>  修改表情包标签\n"
                 "  /zra bqb add +图片    手动添加表情包\n"
                 "\n"
                 "番茄小说监控（管理员）\n"
@@ -370,8 +371,19 @@ class ZerasosPlugin(Star):
                         added += 1
                 yield event.plain_result(f"✅ 已添加 {added} 张表情包")
 
+            elif bcmd == "modify":
+                if len(parts) < 5 or not parts[3].isdigit():
+                    yield event.plain_result("用法: /zra bqb modify <id> <标签1,标签2,...>")
+                    return
+                num = int(parts[3])
+                tags_str = " ".join(parts[4:])
+                if self.bqb.modify_bqb_tags(num, tags_str):
+                    yield event.plain_result(f"✅ 已更新表情包 #{num} 标签")
+                else:
+                    yield event.plain_result(f"❌ 未找到表情包 #{num}")
+
             else:
-                yield event.plain_result("用法: /zra bqb <list|add|remove|get>")
+                yield event.plain_result("用法: /zra bqb <list|add|remove|get|modify>")
             return
 
         # ── 未知子指令 ──
