@@ -6,6 +6,7 @@ import logging
 from astrbot.api.all import *
 from astrbot.api.event import filter as plugin_filter
 from astrbot.api.event.filter import EventMessageType
+from astrbot.api.star import StarTools
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -27,7 +28,7 @@ SINGLE_EARLY = re.compile(r"^早$")
 SINGLE_SAFE  = re.compile(r"^安$")
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.2")
+@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.2001")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
