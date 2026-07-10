@@ -34,13 +34,16 @@ SINGLE_SAFE  = _re.compile(r"^安$")
 # =======================================================
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.0.0")
+@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.1.0")
 class ZerasosPlugin(Star):
     """泽拉索斯 —— 集签到、信仰值等个性化功能于一体的 AstrBot 插件"""
 
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
         self.config = config or {}
+
+        # ---- 功能开关 ----
+        self.enable_checkin = bool(self.config.get("enable_checkin", True))
 
         # ---- 管理员 ----
         self.admin_qq = str(self.config.get("admin_qq", ""))
@@ -60,6 +63,13 @@ class ZerasosPlugin(Star):
 
         # ---- 字体 ----
         self._font_path = self._find_font()
+
+    def on_config_update(self, config: dict):
+        """WebUI 修改配置后的热重载"""
+        self.config = config or {}
+        self.enable_checkin = bool(self.config.get("enable_checkin", True))
+        self.admin_qq = str(self.config.get("admin_qq", ""))
+        logging.info(f"[泽拉索斯] 配置已热重载。签到: {'开启' if self.enable_checkin else '关闭'}")
 
     # ======================== 工具方法 ========================
 
@@ -173,6 +183,8 @@ class ZerasosPlugin(Star):
     @filter.on_message()
     async def on_message(self, event: AstrMessageEvent):
         """拦截所有消息，检测签到触发词"""
+        if not self.enable_checkin:
+            return
         if event.is_at_or_command():
             return
 
@@ -192,6 +204,9 @@ class ZerasosPlugin(Star):
     @command("checkin")
     async def checkin_cmd(self, event: AstrMessageEvent):
         """处理 /checkin 指令"""
+        if not self.enable_checkin:
+            yield event.plain_result("签到功能未开启。")
+            return
         uid = self._uid(event)
         if not uid:
             return
@@ -357,6 +372,9 @@ class ZerasosPlugin(Star):
     @command("checkin reset")
     async def checkin_reset(self, event: AstrMessageEvent):
         """/checkin reset confirm force  — 重置全部签到数据"""
+        if not self.enable_checkin:
+            yield event.plain_result("签到功能未开启。")
+            return
         parts = event.message_str.strip().split()
         # 期望: /checkin reset confirm force
         if len(parts) < 4 or parts[-2] != "confirm" or parts[-1] != "force":

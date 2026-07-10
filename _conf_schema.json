@@ -1,4 +1,9 @@
 {
+	"enable_checkin": {
+		"type": "bool",
+		"description": "启用签到功能",
+		"default": true
+	},
 	"admin_qq": {
 		"type": "string",
 		"description": "管理员 QQ 号",
