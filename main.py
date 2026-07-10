@@ -36,7 +36,7 @@ SINGLE_SAFE  = _re.compile(r"^安$")
 # =======================================================
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.1204")
+@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.1205")
 class ZerasosPlugin(Star):
     """泽拉索斯 —— 集签到、信仰值等个性化功能于一体的 AstrBot 插件"""
 
@@ -214,10 +214,6 @@ class ZerasosPlugin(Star):
         if not uid:
             if self.debug_mode:
                 logging.warning(f"[泽拉索斯-DEBUG] 无法提取 UID")
-            return
-        if uid == self.admin_qq:
-            if self.debug_mode:
-                logging.info(f"[泽拉索斯-DEBUG] 管理员消息跳过")
             return
 
         if self.debug_mode:
