@@ -27,8 +27,7 @@ class BqbManager:
     def __init__(self, *, data_dir: str, config: dict, context):
         self.config = config or {}
         self.context = context
-        self.send_enabled = bool(self.config.get("enable_bqb_send", True))
-        self.steal_enabled = bool(self.config.get("enable_bqb_steal", True))
+        self._parse_config()
 
         self.bqb_dir = os.path.join(data_dir, "bqb")
         os.makedirs(self.bqb_dir, exist_ok=True)
@@ -108,7 +107,7 @@ class BqbManager:
     def _get_provider(self):
         """获取配置的 Provider，留空则用默认"""
         try:
-            provider_id = self.config.get("bqb_provider_id", "")
+            provider_id = self._bqb_provider_id
             all_providers = self.context.get_all_providers()
             if not all_providers:
                 return None
@@ -382,7 +381,15 @@ class BqbManager:
         return tags
 
     # ── 配置更新 ────────────────────────────────
+    def _parse_config(self):
+        """从 WebUI 配置中读取表情包相关配置"""
+        bc = self.config.get("bqb", {})
+        if not isinstance(bc, dict):
+            bc = {}
+        self.send_enabled = bool(bc.get("enable_bqb_send", True))
+        self.steal_enabled = bool(bc.get("enable_bqb_steal", True))
+        self._bqb_provider_id = str(bc.get("bqb_provider_id", ""))
+
     def on_config_update(self, config: dict):
         self.config = config or {}
-        self.send_enabled = bool(self.config.get("enable_bqb_send", True))
-        self.steal_enabled = bool(self.config.get("enable_bqb_steal", True))
+        self._parse_config()

@@ -4,6 +4,14 @@
 
 ## ✨ 功能
 
+### 🎭 表情包
+| 功能 | 说明 |
+|------|------|
+| **自动偷取** | 看到好图→AI 视觉打标签→自动保存到表情包库 |
+| **概率发送** | 日常闲聊时根据情绪/场景标签匹配，随机发送 |
+| **手动管理** | `/zra bqb list/add/remove/get` 管理表情包库 |
+| **独立开关** | 偷取和发送功能可分别启停 |
+
 ### 📅 每日签到
 | 功能 | 说明 |
 |------|------|
@@ -57,6 +65,10 @@ apt install fonts-noto-cjk
 | `/zra list [页数]` | 签到排行榜 |
 | `/zra search <QQ号>` | 查询指定用户签到详情 |
 | `/zra reset confirm force` | 重置所有签到数据 |
+| `/zra bqb list [页]` | 查看表情包列表 |
+| `/zra bqb get <id>` | 获取指定表情包 |
+| `/zra bqb remove <id>` | 删除表情包 |
+| `/zra bqb add` + 图片 | 手动添加表情包 |
 | `/zra fanqie force` | 强制检查番茄小说更新并播报 |
 | `/zra fanqie add` | 在目标群发送，绑定推送 |
 | `/zra fanqie del` | 移出推送列表 |
@@ -71,6 +83,9 @@ apt install fonts-noto-cjk
 | `enable_checkin` | 签到功能开关 |
 | `debug_mode` | 签到调试日志 |
 | `admin_qq` | 管理员 QQ 号 |
+| `enable_bqb_send` | 自动发表情包 |
+| `enable_bqb_steal` | 自动偷表情包 |
+| `bqb_provider_id` | 表情包标签分析模型 |
 | `novel_ids` | 监控的小说 ID（逗号分隔） |
 | `check_interval` | 轮询间隔（分钟） |
 | `novel_summaries` | 各小说剧情概要 |
@@ -81,9 +96,10 @@ apt install fonts-noto-cjk
 
 ```
 zerasos_bot/
-├── main.py              # 统一入口（签到 + 番茄监控）
+├── main.py              # 统一入口（签到 + 番茄监控 + 表情包）
 ├── checkin.py            # 签到核心模块
 ├── fanqie.py             # 番茄监控核心模块
+├── bqb.py                # 🆕 表情包核心模块
 ├── _conf_schema.json     # WebUI 配置定义
 ├── metadata.yaml         # 插件元信息
 ├── CHANGELOG.md          # 更新日志

@@ -4,18 +4,6 @@
 		"description": "启用签到功能",
 		"default": true
 	},
-	"enable_bqb_send": {
-		"type": "bool",
-		"description": "自动发表情包",
-		"hint": "日常闲聊时概率发送已保存的表情包",
-		"default": true
-	},
-	"enable_bqb_steal": {
-		"type": "bool",
-		"description": "自动偷表情包",
-		"hint": "开启后，看到好图会概率保存到表情包库",
-		"default": true
-	},
 	"debug_mode": {
 		"type": "bool",
 		"description": "调试模式：输出详细日志方便排查问题",
@@ -28,13 +16,32 @@
 		"obvious_hint": true,
 		"default": ""
 	},
-	"bqb_provider_id": {
-		"type": "string",
-		"description": "表情包标签分析模型",
-		"hint": "选择用于分析表情包图片的 AI 模型。建议选择支持视觉能力的模型。留空则自动使用 AstrBot 默认模型。",
-		"obvious_hint": true,
-		"default": "",
-		"_special": "select_provider"
+	"bqb": {
+		"type": "object",
+		"description": "表情包功能",
+		"hint": "来开启表情包大战吧！",
+		"items": {
+			"enable_bqb_send": {
+				"type": "bool",
+				"description": "自动发表情包",
+				"hint": "日常闲聊时概率发送已保存的表情包",
+				"default": true
+			},
+			"enable_bqb_steal": {
+				"type": "bool",
+				"description": "自动偷表情包",
+				"hint": "开启后，看到好图会概率保存到表情包库",
+				"default": true
+			},
+			"bqb_provider_id": {
+				"type": "string",
+				"description": "表情包标签分析模型",
+				"hint": "选择用于分析表情包图片的 AI 模型。建议选择支持视觉能力的模型。留空则自动使用 AstrBot 默认模型。",
+				"obvious_hint": true,
+				"default": "",
+				"_special": "select_provider"
+			}
+		}
 	},
 	"fanqie": {
 		"type": "object",
