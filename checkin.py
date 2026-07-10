@@ -252,21 +252,28 @@ class CheckinManager:
             # ── 文字 ──
             tx, ty, lh = lx + 50, 45, 85
 
-            # @昵称：黑色文字 + 白色阴影（偏移1px确保可读）
+            # 描边 + 阴影工具函数
+            def _draw_stroked(pos, text, fill, font, stroke_width=2):
+                # 黑色阴影（右下偏移1px）
+                draw.text((pos[0] + 1, pos[1] + 1), text, fill=(0, 0, 0), font=font)
+                # 白色描边 + 本体
+                draw.text(pos, text, fill=fill, font=font,
+                           stroke_width=stroke_width, stroke_fill=(255, 255, 255))
+
+            # @昵称
             nick_ = nickname[:7] + "..." if len(nickname) > 7 else nickname
             nick_text = f"-> {nick_}"
-            draw.text((tx + 1, ty + 1), nick_text, fill=(255, 255, 255), font=ft_medium)
-            draw.text((tx, ty), nick_text, fill=(0, 0, 0), font=ft_medium)
+            _draw_stroked((tx, ty), nick_text, fill=(0, 0, 0), font=ft_medium)
 
-            # 信仰值：金色
+            # 信仰值：金色 + 白描边
             pts = user_data.get("today_points", 0)
-            draw.text((tx, ty + lh), f"信仰值 +{pts}", fill=(255, 215, 0), font=ft_large)
+            _draw_stroked((tx, ty + lh), f"信仰值 +{pts}", fill=(255, 215, 0), font=ft_large)
 
-            # 累计/连续签到：淡蓝色
+            # 累计/连续签到
             total = user_data.get("total_checkins", 0)
             streak = user_data.get("streak", 0)
-            draw.text((tx, ty + lh * 2), f"累计签到：{total} 天", fill=(180, 180, 255), font=ft_medium)
-            draw.text((tx, ty + lh * 2 + 80), f"连续签到：{streak} 天", fill=(180, 180, 255), font=ft_small)
+            _draw_stroked((tx, ty + lh * 2), f"累计签到：{total} 天", fill=(180, 180, 255), font=ft_medium)
+            _draw_stroked((tx, ty + lh * 2 + 80), f"连续签到：{streak} 天", fill=(180, 180, 255), font=ft_small)
 
             # ── 右下角总信仰值 ──
             total_faith = user_data.get("faith_points", 0)
@@ -274,7 +281,7 @@ class CheckinManager:
             tiny_txt = f"总信仰值: {total_faith}"
             tbbox = draw.textbbox((0, 0), tiny_txt, font=ft_tiny)
             tw_ = tbbox[2] - tbbox[0]
-            draw.text((w - tw_ - 25, h - 35), tiny_txt, fill=(200, 200, 200), font=ft_tiny)
+            _draw_stroked((w - tw_ - 25, h - 35), tiny_txt, fill=(200, 200, 200), font=ft_tiny)
 
             bg.save(cache_path, "PNG")
             return cache_path
