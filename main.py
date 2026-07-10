@@ -30,7 +30,7 @@ from checkin import CheckinManager
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.1316")
+@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.1317")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
@@ -57,7 +57,12 @@ class ZerasosPlugin(Star):
     # =================== 字体查找 ===================
     @staticmethod
     def _find_font() -> Optional[str]:
+        # ARHei 优先
+        arhei_path = os.path.join(PLUGIN_DIR, "res", "ARHei.ttf")
+        if os.path.exists(arhei_path):
+            return arhei_path
         for p in [
+            r"C:\Windows\Fonts\ARHei.ttf",
             r"C:\Windows\Fonts\msyh.ttc", r"C:\Windows\Fonts\msyh.ttf",
             r"C:\Windows\Fonts\SIMHEI.TTF", r"C:\Windows\Fonts\Deng.ttf",
             r"/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",

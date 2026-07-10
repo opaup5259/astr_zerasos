@@ -159,7 +159,7 @@ class CheckinManager:
                 return {"type": "image", "path": cached_path}
             return None
 
-        points = random.randint(1, 20)
+        points = random.randint(1, 10)
         user_data["faith_points"] += points
         user_data["today_points"] = points
         user_data["total_checkins"] += 1
