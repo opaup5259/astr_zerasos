@@ -1,1 +1,1 @@
-ÿş
+# astr_zerasos package
