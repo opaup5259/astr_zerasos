@@ -128,19 +128,23 @@ class BqbManager:
 
     # ── 下载图片 ────────────────────────────────
     async def _download_image(self, url: str, save_path: str) -> bool:
-        """下载图片（支持 HTTP/HTTPS 和 file:// 本地路径）"""
-        # 处理 file:// 本地路径
-        if url.startswith("file://"):
-            local_path = url[7:]  # 去掉 file://
-            # Windows 路径处理
-            if local_path.startswith("/") and len(local_path) > 2 and local_path[2] == ":":
-                local_path = local_path[1:]  # /C:/xxx -> C:/xxx
+        """获取图片到本地（支持 HTTP/HTTPS、file://、本地路径）"""
+        path = url
+
+        # 去掉 file:// 前缀
+        if path.startswith("file://"):
+            path = path[7:]
+            if path.startswith("/") and len(path) > 2 and path[2] == ":":
+                path = path[1:]
+
+        # 不是 HTTP 开头的 → 本地文件路径，直接复制
+        if not path.startswith(("http://", "https://")):
             try:
                 import shutil
-                shutil.copy2(local_path, save_path)
+                shutil.copy2(path, save_path)
                 return True
             except Exception as e:
-                logging.error(f"[BQB] 复制本地文件失败: {e}")
+                logging.error(f"[BQB] 复制本地文件失败 {path}: {e}")
                 return False
 
         # HTTP/HTTPS 下载
@@ -148,13 +152,13 @@ class BqbManager:
             return False
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=15) as resp:
+                async with session.get(path, timeout=15) as resp:
                     if resp.status == 200:
                         with open(save_path, "wb") as f:
                             f.write(await resp.read())
                         return True
         except Exception as e:
-            logging.error(f"[BQB] 下载失败: {e}")
+            logging.error(f"[BQB] 下载失败 {path}: {e}")
         return False
 
     def _get_ext_from_url(self, url: str) -> str:
