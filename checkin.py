@@ -267,7 +267,15 @@ class CheckinManager:
             tx, ty, lh = lx + 50, 45, 85
 
             nick_ = nickname[:10] + "..." if len(nickname) > 10 else nickname
-            self._draw_text(draw, (tx, ty), f"@{nick_}", fill=(0, 0, 0), font=ft_medium)
+            nick_text = f"@{nick_}"
+            # 昵称背景：浅色圆角矩形，确保文字在任何背景上都清晰
+            nbbox = draw.textbbox((0, 0), nick_text, font=ft_medium)
+            nw = nbbox[2] - nbbox[0] + 16
+            nh = nbbox[3] - nbbox[1] + 10
+            nx, ny = tx - 6, ty - 3
+            draw.rounded_rectangle((nx, ny, nx + nw, ny + nh), radius=10, fill=(240, 240, 245))
+            # 纯黑文字，无额外描边
+            draw.text((tx, ty), nick_text, fill=(0, 0, 0), font=ft_medium)
 
             pts = user_data.get("today_points", 0)
             self._draw_text(draw, (tx, ty + lh), f"信仰值 +{pts}", fill=(255, 215, 0), font=ft_large)
