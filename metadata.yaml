@@ -1,6 +1,6 @@
 name: zerasos_bot
 desc: 泽拉索斯多功能插件 —— 签到、信仰值等个性化功能
 help: "发送 /签到 /打卡 或 早安 等关键词签到。管理指令: /zra checkin list/reset/search"
-version: "1.2001"
+version: "1.13"
 author: "opaup"
 repo: "https://github.com/opaup5259/astr_zerasos.git"

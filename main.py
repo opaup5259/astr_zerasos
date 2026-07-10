@@ -28,7 +28,7 @@ SINGLE_EARLY = re.compile(r"^早$")
 SINGLE_SAFE  = re.compile(r"^安$")
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.2001")
+@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.13")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
