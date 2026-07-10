@@ -22,6 +22,14 @@
 		"obvious_hint": true,
 		"default": ""
 	},
+	"bqb_provider_id": {
+		"type": "string",
+		"description": "表情包标签分析模型",
+		"hint": "选择用于分析表情包图片的 AI 模型。建议选择支持视觉能力的模型。留空则自动使用 AstrBot 默认模型。",
+		"obvious_hint": true,
+		"default": "",
+		"_special": "select_provider"
+	},
 	"fanqie": {
 		"type": "object",
 		"description": "番茄更新推送",

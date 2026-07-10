@@ -105,15 +105,25 @@ class BqbManager:
         return ["表情包"]
 
     def _get_provider(self):
-        """获取第一个可用的 LLM Provider"""
+        """获取配置的 Provider，留空则用默认"""
         try:
+            provider_id = self.config.get("bqb_provider_id", "")
             all_providers = self.context.get_all_providers()
-            if all_providers:
-                if isinstance(all_providers, dict):
-                    return next(iter(all_providers.values()), None)
-                return all_providers[0] if len(all_providers) > 0 else None
-        except Exception:
-            pass
+            if not all_providers:
+                return None
+
+            if isinstance(all_providers, dict):
+                if provider_id and provider_id in all_providers:
+                    return all_providers[provider_id]
+                return next(iter(all_providers.values()), None)
+            elif isinstance(all_providers, list):
+                if provider_id:
+                    for p in all_providers:
+                        if hasattr(p, "get_name") and p.get_name() == provider_id:
+                            return p
+                return all_providers[0] if all_providers else None
+        except Exception as e:
+            logging.error(f"[BQB] 获取 Provider 失败: {e}")
         return None
 
     # ── 下载图片 ────────────────────────────────
