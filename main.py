@@ -20,6 +20,11 @@ from astrbot.api.star import StarTools
 
 importlib.invalidate_caches()
 
+# 热重载时检查：如果 checkin 模块还在 sys.modules 里，踢掉它强制重载
+for _mod in list(sys.modules.keys()):
+    if _mod == 'checkin' or _mod.startswith('checkin.'):
+        del sys.modules[_mod]
+
 from checkin import CheckinManager
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
