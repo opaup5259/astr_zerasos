@@ -31,7 +31,7 @@ from fanqie import FanqieManager
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.2101")
+@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.2102")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
@@ -145,6 +145,7 @@ class ZerasosPlugin(Star):
     # =================== 指令代理 ===================
     @command("checkin")
     async def checkin_cmd(self, event: AstrMessageEvent):
+        """快捷签到，等价于 /zra checkin"""
         if not self.cm.enable_checkin:
             yield event.plain_result("签到功能未开启。")
             return
@@ -156,119 +157,141 @@ class ZerasosPlugin(Star):
         if result:
             yield self._render_result(event, result)
 
-    @command("zra checkin list")
-    async def zra_checkin_list(self, event: AstrMessageEvent):
-        uid = self.cm._uid(event)
-        if uid != self.cm.admin_qq:
-            yield event.plain_result("你没有权限。")
-            return
-        args = event.message_str.strip().split()
-        page = int(args[3]) if len(args) >= 4 and args[3].isdigit() else 1
-        text = self.cm.leaderboard(page=page)
-        yield event.plain_result(text or "这一页没有数据。")
-
-    @command("zra search")
-    async def zra_search(self, event: AstrMessageEvent):
-        uid = self.cm._uid(event)
-        if uid != self.cm.admin_qq:
-            yield event.plain_result("你没有权限。")
-            return
-        args = event.message_str.strip().split()
-        if len(args) < 3:
-            yield event.plain_result("用法: /zra search <QQ号>")
-            return
-        target_qq = args[2]
-        text = self.cm.search_user(target_qq)
-        yield event.plain_result(text or f"未找到 QQ {target_qq} 的签到记录。")
-
-    @command("zra checkin reset")
-    async def zra_checkin_reset(self, event: AstrMessageEvent):
-        uid = self.cm._uid(event)
-        if uid != self.cm.admin_qq:
-            yield event.plain_result("你没有权限。")
-            return
-        parts = event.message_str.strip().split()
-        if len(parts) < 4 or parts[-2] != "confirm" or parts[-1] != "force":
-            yield event.plain_result("用法: /zra checkin reset confirm force")
-            return
-        await self.cm.reset_all()
-        yield event.plain_result("已重置所有签到数据和缓存图片。")
-
-    @command("checkin reset")
-    async def checkin_reset(self, event: AstrMessageEvent):
-        yield event.plain_result("旧指令已迁移，请使用: /zra checkin reset confirm force")
-
-    # =================== 番茄小说 ===================
-    @command("fanqie")
-    async def fanqie_router(self, event: AstrMessageEvent):
-        sender = str(event.message_obj.sender.user_id)
-        if sender != self.config.get("admin_qq", ""):
-            return
-
+    # =================== /zra 父指令 ===================
+    @command("zra")
+    async def zra_router(self, event: AstrMessageEvent):
+        uid = str(event.message_obj.sender.user_id)
         text = event.message_str.strip()
         parts = text.split()
-        if len(parts) < 2:
-            yield event.plain_result("用法: /fanqie <force|add|del|list|reset|get_umo|help>")
+        subcmd = parts[1].lower() if len(parts) >= 2 else "help"
+        sender = uid
+        admin = self.config.get("admin_qq", "")
+
+        # ── help ──
+        if subcmd == "help":
+            yield event.plain_result(
+                "📖 泽拉索斯帮助\n"
+                "━━━━━━━━━━━━━━\n"
+                "签到\n"
+                "  /zra checkin        手动签到\n"
+                "  /签到 /打卡 早安等  关键词自动签到\n"
+                "\n"
+                "管理（需管理员QQ）\n"
+                "  /zra list [页数]    签到排行榜\n"
+                "  /zra search <QQ>    查询指定用户签到\n"
+                "  /zra reset confirm force  重置签到\n"
+                "\n"
+                "番茄小说监控（管理员）\n"
+                "  /zra fanqie force   强制检查并播报\n"
+                "  /zra fanqie add     绑定当前群为推送目标\n"
+                "  /zra fanqie del     移出推送\n"
+                "  /zra fanqie list    查看推送群聊\n"
+                "  /zra fanqie reset   清空章节缓存\n"
+                "  /zra fanqie get_umo 获取当前群标识\n"
+                "\n"
+                "WebUI 配置签到/番茄参数"
+            )
             return
 
-        subcmd = parts[1].lower()
+        # ── 管理员权限检查 ──
+        if sender != admin:
+            yield event.plain_result("你没有权限。")
+            return
 
-        if subcmd == "force":
-            yield event.plain_result(f"强制拉取 {len(self.fm.novel_ids)} 本番茄小说...")
-            debug_msg, preview_msg = await self.fm.do_check_and_notify(is_debug=True)
-            yield event.plain_result(debug_msg)
-            if preview_msg:
-                yield event.plain_result("【播报预览】\n" + preview_msg)
+        # ── checkin / 签到 ──
+        if subcmd == "checkin":
+            if not self.cm.enable_checkin:
+                yield event.plain_result("签到功能未开启。")
+                return
+            uid = self.cm._uid(event)
+            if not uid:
+                return
+            nickname = self.cm._nickname(event)
+            result = await self.cm.process_checkin(uid, nickname, "hard")
+            if result:
+                yield self._render_result(event, result)
+            return
 
-        elif subcmd in ("add", "del"):
-            target_id = " ".join(parts[2:]).strip() if len(parts) >= 3 else ""
-            target_umo = target_id or event.unified_msg_origin
-            if subcmd == "add":
-                if target_umo not in self.fm.data["target_groups"]:
-                    self.fm.data["target_groups"].append(target_umo)
-                    await self.fm._save_data()
-                    yield event.plain_result(f"✅ 已添加 '{target_umo}'")
+        if subcmd == "list":
+            page = int(parts[2]) if len(parts) >= 3 and parts[2].isdigit() else 1
+            text = self.cm.leaderboard(page=page)
+            yield event.plain_result(text or "这一页没有数据。")
+            return
+
+        if subcmd == "search":
+            if len(parts) < 3:
+                yield event.plain_result("用法: /zra search <QQ号>")
+                return
+            text = self.cm.search_user(parts[2])
+            yield event.plain_result(text or f"未找到 QQ {parts[2]} 的签到记录。")
+            return
+
+        if subcmd == "reset":
+            if len(parts) < 4 or parts[-2] != "confirm" or parts[-1] != "force":
+                yield event.plain_result("用法: /zra reset confirm force")
+                return
+            await self.cm.reset_all()
+            yield event.plain_result("已重置所有签到数据和缓存图片。")
+            return
+
+        # ── fanqie ──
+        if subcmd == "fanqie" and len(parts) >= 3:
+            fcmd = parts[2].lower()
+
+            if fcmd == "force":
+                debug_msg, preview_msg = await self.fm.do_check_and_notify(is_debug=True)
+                lines = [f"强制拉取 {len(self.fm.novel_ids)} 本番茄小说..."]
+                if debug_msg:
+                    lines.append(debug_msg)
+                if preview_msg:
+                    lines.append("【播报预览】")
+                    lines.append(preview_msg)
+                yield event.plain_result("\n".join(lines))
+
+            elif fcmd in ("add", "del"):
+                target_id = " ".join(parts[3:]).strip() if len(parts) >= 4 else ""
+                target_umo = target_id or event.unified_msg_origin
+                if fcmd == "add":
+                    if target_umo not in self.fm.data["target_groups"]:
+                        self.fm.data["target_groups"].append(target_umo)
+                        await self.fm._save_data()
+                        yield event.plain_result(f"✅ 已添加 '{target_umo}'")
+                    else:
+                        yield event.plain_result(f"⚠️ 已在列表中")
                 else:
-                    yield event.plain_result(f"⚠️ 已在列表中")
-            else:
-                if target_umo in self.fm.data["target_groups"]:
-                    self.fm.data["target_groups"].remove(target_umo)
-                    await self.fm._save_data()
-                    yield event.plain_result(f"✅ 已移除 '{target_umo}'")
+                    if target_umo in self.fm.data["target_groups"]:
+                        self.fm.data["target_groups"].remove(target_umo)
+                        await self.fm._save_data()
+                        yield event.plain_result(f"✅ 已移除 '{target_umo}'")
+                    else:
+                        yield event.plain_result(f"⚠️ 不在列表中")
+
+            elif fcmd == "list":
+                groups = self.fm.data.get("target_groups", [])
+                if not groups:
+                    yield event.plain_result("推送列表为空。\n💡 在目标群发送 /zra fanqie add 即可绑定")
                 else:
-                    yield event.plain_result(f"⚠️ 不在列表中")
+                    res = "当前推送群聊:\n" + "\n".join(f"- {g}" for g in groups)
+                    yield event.plain_result(res)
 
-        elif subcmd == "list":
-            groups = self.fm.data.get("target_groups", [])
-            if not groups:
-                yield event.plain_result("推送列表为空。\n💡 在目标群发送 /fanqie add 即可绑定")
+            elif fcmd == "reset":
+                self.fm.data["chapter_states"] = {}
+                self.fm.data["chapter_history"] = {}
+                await self.fm._save_data()
+                yield event.plain_result("✅ 已清除所有章节缓存，下次拉取必定播报")
+
+            elif fcmd == "get_umo":
+                yield event.plain_result(
+                    f"✅ 当前底层标识 (UMO):\n{event.unified_msg_origin}\n\n"
+                    f"💡 用 /zra fanqie add 绑定即可 100% 投递"
+                )
+
             else:
-                res = "当前推送群聊 (UMO) 列表:\n" + "\n".join(f"- {g}" for g in groups)
-                yield event.plain_result(res)
+                yield event.plain_result("用法: /zra fanqie <force|add|del|list|reset|get_umo>")
+            return
 
-        elif subcmd == "reset":
-            self.fm.data["chapter_states"] = {}
-            self.fm.data["chapter_history"] = {}
-            await self.fm._save_data()
-            yield event.plain_result("✅ 已清除所有章节缓存，下次拉取必定播报")
-
-        elif subcmd == "get_umo":
-            yield event.plain_result(
-                f"✅ 当前底层标识 (UMO):\n{event.unified_msg_origin}\n\n"
-                f"💡 用 /fanqie add 绑定即可 100% 投递"
-            )
-
-        elif subcmd == "help":
-            yield event.plain_result(
-                "📖 番茄监控帮助\n"
-                "1. /fanqie force - 强制检查并播报\n"
-                "2. /fanqie list - 查看推送群聊\n"
-                "3. /fanqie add [群号] - 在目标群发送即可绑定\n"
-                "4. /fanqie del [群号] - 移除推送\n"
-                "5. /fanqie reset - 清空历史记录\n"
-                "6. /fanqie get_umo - 获取当前群标识\n"
-                "7. /fanqie help - 本帮助"
-            )
+        # ── 未知子指令 ──
+        yield event.plain_result(f"未知指令 /zra {subcmd}，发送 /zra help 查看帮助")
 
     # =================== 工具 ===================
     @staticmethod
