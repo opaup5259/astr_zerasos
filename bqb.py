@@ -128,6 +128,22 @@ class BqbManager:
 
     # ── 下载图片 ────────────────────────────────
     async def _download_image(self, url: str, save_path: str) -> bool:
+        """下载图片（支持 HTTP/HTTPS 和 file:// 本地路径）"""
+        # 处理 file:// 本地路径
+        if url.startswith("file://"):
+            local_path = url[7:]  # 去掉 file://
+            # Windows 路径处理
+            if local_path.startswith("/") and len(local_path) > 2 and local_path[2] == ":":
+                local_path = local_path[1:]  # /C:/xxx -> C:/xxx
+            try:
+                import shutil
+                shutil.copy2(local_path, save_path)
+                return True
+            except Exception as e:
+                logging.error(f"[BQB] 复制本地文件失败: {e}")
+                return False
+
+        # HTTP/HTTPS 下载
         if not HAS_AIOHTTP:
             return False
         try:
@@ -147,16 +163,20 @@ class BqbManager:
 
     # ── 提取消息中的图片 ────────────────────────
     def _extract_images(self, event) -> list[str]:
-        """从消息中提取图片 URL 列表"""
+        """从消息中提取图片路径/URL 列表"""
         urls = []
         try:
             for comp in event.message_obj.message:
                 if isinstance(comp, Image):
-                    url = getattr(comp, "file", "") or getattr(comp, "url", "")
-                    if url:
-                        urls.append(url)
-        except Exception:
-            pass
+                    # 尝试所有可能的属性
+                    for attr in ("file", "url", "path", "src", "data"):
+                        v = getattr(comp, attr, None)
+                        if v and isinstance(v, str) and v.strip():
+                            urls.append(v.strip())
+                            break
+        except Exception as e:
+            logging.error(f"[BQB] 提取图片失败: {e}")
+        logging.info(f"[BQB] _extract_images 找到 {len(urls)} 张图: {urls}")
         return urls
 
     # ── CRUD ────────────────────────────────────
