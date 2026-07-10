@@ -1,48 +1,56 @@
 # 更新日志
 
+## 1.2 (2026-07-10)
+### 新增
+- 背景图改为插件 `res/bg.png` 目录，自动等比缩放
+- 字体调大（64/42/30）
+- `/zra checkin list [页数]` 签到排行榜（按签到次数，每页5条）
+- `/zra search <QQ号>` 查询指定用户签到详情（含昵称）
+- 重置指令迁移到 `/zra checkin reset confirm force`
+- 签到数据新增昵称字段，每次签到自动更新
+
+## 1.1205 (2026-07-10)
+### 修复
+- 真的移除管理员消息跳过逻辑（之前 PowerShell 替换静默失败）
+
 ## 1.1204 (2026-07-10)
 ### 修复
-- 新增 NotoSansCJK .otf 字体路径支持，修复 Linux 容器中文乱码
+- 新增 Linux .otf 中文字体路径
 
 ## 1.1203 (2026-07-10)
 ### 修复
-- 移除 `on_message` 中的管理员跳过逻辑——管理员也想用关键词签到！
+- 移除 `on_message` 中的管理员跳过逻辑
 
 ## 1.1202 (2026-07-10)
 ### 改进
-- debug 日志改为直接 QQ 消息输出给管理员（开启 debug_mode 后，管理员发任意消息都看到全链路诊断）
+- debug 日志改为直接 QQ 消息输出给管理员
 
 ## 1.1201 (2026-07-10)
 ### 修复
-- 修复 debug 日志在 `admin_qq` 赋值前引用导致的 AttributeError
+- debug 日志 `admin_qq` 赋值顺序修复
 
 ## 1.12 (2026-07-10)
 ### 新增
-- WebUI `debug_mode` 开关，开启后全链路输出详细日志（消息接收→关键词匹配→签到处理→图片生成）
-- 启动时环境自检日志（PIL/aiohttp/字体/数据目录/背景图）
+- WebUI `debug_mode` 开关，全链路日志
 
 ## 1.11 (2026-07-10)
 ### 修复
-- 硬关键词增加 `/签到` `/打卡` 支持（带斜杠指令也触发签到）
-- 修复 `await` async generator 导致 yield 被丢弃，签到无响应
-- 软触发保留 `is_at_or_wake_command` 检查，避免与 @bot LLM 重复响应
+- 硬关键词增加 `/签到` `/打卡`
+- 修复 async generator yield 丢失
+- 软触发保留 `is_at_or_wake_command` 检查
 
 ## 1.10 (2026-07-10)
 ### 新增
-- WebUI 签到功能开关 `enable_checkin`，关闭后签到完全不响应
-- 配置热重载：WebUI 改设置即时生效
+- WebUI 签到开关 `enable_checkin` + 配置热重载
 
 ### 修复
-- 修正 filter 导入路径为 `from astrbot.api.event import filter`
-- 修正消息监听装饰器为 `event_message_type(EventMessageType.ALL)`
-- 修正 `is_at_or_wake_command` 属性访问
-- 修正 `event.image_result()` 传入文件路径
+- 修正 filter 导入、`event_message_type`、`is_at_or_wake_command`、`image_result` 路径
 
 ## 1.0 (2026-07-10)
 ### 新增
-- 每日签到系统：信仰值积分，支持图片卡片展示
-- 签到触发词：`/签到`/`/打卡`（硬触发）、`早安`/`早`/`安安`/`晚安`/`日安` 等（软触发）
-- 签到图片卡片：左侧圆形头像 + 竖线分隔 + 右侧 @昵称 / 信仰值+xx / 累计签到N天 / 连续签到N天
-- 软触发已签到时静默无反应，硬触发发送缓存卡片
-- 管理指令 `/checkin reset confirm force` 重置全部签到数据与缓存
+- 每日签到：信仰值积分 + 图片卡片
+- 触发词：`/签到` `/打卡`（硬）+ `早安` `早` `安安` `晚安` 等（软）
+- 图片卡片：头像 + 竖线 + @昵称 / 信仰值 / 累计 / 连续
+- 软触发已签到静默，硬触发发送缓存卡片
+- 管理指令 `/checkin reset confirm force`
 - WebUI 可配置 admin_qq
