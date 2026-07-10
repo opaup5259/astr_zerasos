@@ -267,7 +267,7 @@ class CheckinManager:
             tx, ty, lh = lx + 50, 45, 85
 
             nick_ = nickname[:10] + "..." if len(nickname) > 10 else nickname
-            self._draw_text(draw, (tx, ty), f"@{nick_}", fill=(255, 255, 200), font=ft_medium)
+            self._draw_text(draw, (tx, ty), f"@{nick_}", fill=(0, 0, 0), font=ft_medium)
 
             pts = user_data.get("today_points", 0)
             self._draw_text(draw, (tx, ty + lh), f"信仰值 +{pts}", fill=(255, 215, 0), font=ft_large)
