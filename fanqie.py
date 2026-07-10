@@ -4,6 +4,7 @@
 import json, os, logging, re, asyncio
 from datetime import datetime
 from typing import Optional
+from astrbot.api.all import MessageChain
 
 try:
     import aiohttp
@@ -188,7 +189,6 @@ class FanqieManager:
                 all_debug.append(line)
 
             # ── 推送 ──
-            from astrbot.api.message_components import MessageChain
             msg_chain = MessageChain().message(broadcast_msg)
             success_count = 0
             for target in self.data.get("target_groups", []):
