@@ -36,7 +36,7 @@ SINGLE_SAFE  = _re.compile(r"^安$")
 # =======================================================
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.103")
+@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.104")
 class ZerasosPlugin(Star):
     """泽拉索斯 —— 集签到、信仰值等个性化功能于一体的 AstrBot 插件"""
 
@@ -187,7 +187,7 @@ class ZerasosPlugin(Star):
         """拦截所有消息，检测签到触发词"""
         if not self.enable_checkin:
             return
-        if event.is_at_or_command():
+        if event.is_at_or_wake_command:
             return
 
         text = event.message_str.strip()
@@ -228,9 +228,9 @@ class ZerasosPlugin(Star):
             if trigger_type == "soft":
                 return  # 静默
             # hard: 直接发旧图
-            img = await self._read_cached_card(uid)
-            if img:
-                yield event.image_result(img)
+            cached_path = self._read_cached_card(uid)
+            if cached_path:
+                yield event.image_result(cached_path)
             return
 
         # --- 执行签到 ---
@@ -253,9 +253,9 @@ class ZerasosPlugin(Star):
 
         # --- 生成并发送签到卡片 ---
         nickname = self._nickname(event)
-        img = await self._generate_card(uid, nickname, user_data, is_new=True)
-        if img:
-            yield event.image_result(img)
+        card_path = await self._generate_card(uid, nickname, user_data)
+        if card_path:
+            yield event.image_result(card_path)
         else:
             # PIL 不可用时的文字兜底
             yield event.plain_result(
@@ -264,22 +264,20 @@ class ZerasosPlugin(Star):
 
     # ======================== 签到卡片生成 ========================
 
-    async def _read_cached_card(self, uid: str) -> Optional[bytes]:
-        """读取当天已缓存的卡片"""
+    def _read_cached_card(self, uid: str) -> Optional[str]:
+        """返回当天缓存的卡片文件路径"""
         path = os.path.join(self.temp_dir, f"{uid}.png")
         if os.path.exists(path):
-            try:
-                with open(path, "rb") as f:
-                    return f.read()
-            except Exception:
-                pass
+            return path
         return None
 
     async def _generate_card(self, uid: str, nickname: str,
-                             user_data: dict, is_new: bool) -> Optional[bytes]:
-        """生成签到卡片，覆盖缓存"""
+                             user_data: dict) -> Optional[str]:
+        """生成签到卡片，返回文件路径"""
         if not HAS_PIL:
             return None
+
+        cache_path = os.path.join(self.temp_dir, f"{uid}.png")
 
         try:
             width, height = 800, 400
@@ -349,7 +347,6 @@ class ZerasosPlugin(Star):
 
             # 信仰值（显示今日获得的点数）
             pts = user_data.get("today_points", 0)
-            total_faith = user_data.get("faith_points", 0)
             draw.text((tx, ty + lh), f"信仰值 +{pts}", fill=(255, 215, 0), font=ft_large)
 
             total_days = user_data.get("total_checkins", 0)
@@ -360,10 +357,8 @@ class ZerasosPlugin(Star):
                       fill=(180, 180, 255), font=ft_small)
 
             # --- 保存缓存 ---
-            cache_path = os.path.join(self.temp_dir, f"{uid}.png")
             bg.save(cache_path, "PNG")
-            with open(cache_path, "rb") as f:
-                return f.read()
+            return cache_path
 
         except Exception as e:
             logging.error(f"[泽拉索斯-签到] 图片生成失败: {e}")

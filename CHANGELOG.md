@@ -1,5 +1,11 @@
 # 更新日志
 
+## 1.104 (2026-07-10)
+### 修复
+- `is_at_or_command()` → `is_at_or_wake_command`（属性，不是方法）
+- `event.image_result()` 改为传入文件路径而非 bytes（AstrBot 原生只接受路径/URL）
+- `_generate_card` / `_read_cached_card` 返回文件路径
+
 ## 1.103 (2026-07-10)
 ### 修复
 - 修正消息监听装饰器：`on_message` 不存在，正确 API 是 `event_message_type(EventMessageType.ALL)`
