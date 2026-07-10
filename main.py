@@ -4,7 +4,7 @@ from typing import Optional
 import logging
 
 from astrbot.api.all import *
-from astrbot.api.filter import filter as plugin_filter
+from astrbot.api.event.filter import filter as plugin_filter
 from astrbot.api.star import StarTools
 
 try:
@@ -35,7 +35,7 @@ SINGLE_SAFE  = _re.compile(r"^安$")
 # =======================================================
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.1.1")
+@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.101")
 class ZerasosPlugin(Star):
     """泽拉索斯 —— 集签到、信仰值等个性化功能于一体的 AstrBot 插件"""
 
