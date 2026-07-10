@@ -1,15 +1,17 @@
-import os, sys, logging, importlib, shutil
+import os, sys, logging, importlib
 from typing import Optional
+
+# 禁止 Python 写入 .pyc，从源头杜绝字节码缓存问题
+sys.dont_write_bytecode = True
 
 # 确保插件目录在 Python 路径中（AstrBot 加载时可能未设置）
 _PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 if _PLUGIN_DIR not in sys.path:
     sys.path.insert(0, _PLUGIN_DIR)
 
-# 启动时清理旧字节码缓存，避免热加载跑旧代码
-_PYCACHE = os.path.join(_PLUGIN_DIR, "__pycache__")
-if os.path.isdir(_PYCACHE):
-    shutil.rmtree(_PYCACHE, ignore_errors=True)
+# 清理磁盘上的旧 .pyc 缓存（如果前面已经有进程写入了）
+import shutil
+shutil.rmtree(os.path.join(_PLUGIN_DIR, "__pycache__"), ignore_errors=True)
 
 from astrbot.api.all import *
 from astrbot.api.event import filter as plugin_filter
