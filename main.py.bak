@@ -28,7 +28,7 @@ SINGLE_EARLY = re.compile(r"^早$")
 SINGLE_SAFE  = re.compile(r"^安$")
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.1310")
+@register("zerasos_bot", "opaup", "泽拉索斯多功能插件", "1.13")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
@@ -256,7 +256,7 @@ class ZerasosPlugin(Star):
             w, h = 800, 400
             if os.path.exists(self.bg_path):
                 bg = Image.open(self.bg_path).resize((w, h), Image.LANCZOS)
-                bg = bg.filter(ImageFilter.GaussianBlur(radius=5))
+                bg = bg.filter(ImageFilter.GaussianBlur(radius=12))
             else:
                 bg = Image.new("RGB", (w, h), (30, 30, 50))
             draw = ImageDraw.Draw(bg)
@@ -273,7 +273,7 @@ class ZerasosPlugin(Star):
             ft_medium = _font(42)
             ft_small = _font(30)
 
-            def _draw_text(xy, text, fill, font, stroke_fill=(255,255,255,200), stroke_w=4):
+            def _draw_text(xy, text, fill, font, stroke_fill=(0,0,0,180), stroke_w=3):
                 draw.text(xy, text, fill=fill, font=font, stroke_width=stroke_w, stroke_fill=stroke_fill)
 
             avatar_size = min(w // 3 - 40, h - 80)
@@ -308,17 +308,9 @@ class ZerasosPlugin(Star):
             total = user_data.get("total_checkins", 0)
             streak = user_data.get("streak", 0)
             draw.text((tx, ty + lh * 2), f"\u7d2f\u8ba1\u7b7e\u5230\uff1a{total} \u5929", fill=(180, 180, 255), font=ft_medium)
-            draw.text((tx, ty + lh * 2 + 80), f"\u8fde\u7eed\u7b7e\u5230\uff1a{streak} \u5929", fill=(180, 180, 255), font=ft_small)
+            draw.text((tx, ty + lh * 2 + 40), f"\u8fde\u7eed\u7b7e\u5230\uff1a{streak} \u5929", fill=(180, 180, 255), font=ft_small)
 
-                        # 右下角总信仰值
-            total_faith = user_data.get("faith_points", 0)
-            ft_tiny = _font(22)
-            tiny_txt = f"\u603b\u4fe1\u4ef0\u503c: {total_faith}"
-            tbbox = draw.textbbox((0, 0), tiny_txt, font=ft_tiny)
-            tw = tbbox[2] - tbbox[0]
-            draw.text((w - tw - 25, h - 35), tiny_txt, fill=(200, 200, 200), font=ft_tiny)
-
-            bg.save(cache_path,"PNG")
+            bg.save(cache_path, "PNG")
             return cache_path
         except Exception as e:
             logging.error(f"[泽拉索斯-签到] 图片生成失败: {e}")
