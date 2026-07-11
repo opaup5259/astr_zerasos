@@ -24,14 +24,24 @@ logger = logging.getLogger(__name__)
 # 系统级随机源
 _SYSRAND = random.SystemRandom()
 
+JUDGMENT_LABELS = {
+    "critical_failure": "大失败",
+    "failure": "失败",
+    "success": "成功",
+    "hard_success": "困难成功",
+    "extreme_success": "极难成功",
+    "critical_success": "大成功",
+}
+
 # 默认回复模板（每个等级一条）
+# 占位符：%名称% %VER1%(技能) %VER2%(结果值/最大值) %VER3%(检定结果)
 DEFAULT_REPLIES = {
-    "critical_failure": "%名称%的%技能/原因%检定大失败！（%骰子结果（结果值/最大值）%）",
-    "failure": "%名称%的%技能/原因%检定失败。（%骰子结果（结果值/最大值）%）",
-    "success": "%名称%的%技能/原因%检定成功。（%骰子结果（结果值/最大值）%）",
-    "hard_success": "%名称%的%技能/原因%检定困难成功！（%骰子结果（结果值/最大值）%）",
-    "extreme_success": "%名称%的%技能/原因%检定极难成功！！（%骰子结果（结果值/最大值）%）",
-    "critical_success": "%名称%的%技能/原因%检定大成功！！（%骰子结果（结果值/最大值）%）",
+    "critical_failure": "%名称%的%VER1%检定%VER3%！（%VER2%）",
+    "failure": "%名称%的%VER1%检定%VER3%。（%VER2%）",
+    "success": "%名称%的%VER1%检定%VER3%。（%VER2%）",
+    "hard_success": "%名称%的%VER1%检定%VER3%！（%VER2%）",
+    "extreme_success": "%名称%的%VER1%检定%VER3%！！（%VER2%）",
+    "critical_success": "%名称%的%VER1%检定%VER3%！！（%VER2%）",
 }
 
 # COC7th 判定等级
@@ -129,15 +139,18 @@ def format_ra_reply(judgment: str, roll: int, skill_value: int,
     根据判定结果和模板生成回复文本。
     
     占位符：
-      %名称%              — 角色名
-      %技能/原因%          — 技能名
-      %骰子结果（结果值/最大值）% — 如 "23/60"
+      %名称%   — 用户名/角色名
+      %VER1%   — 技能名/原因
+      %VER2%   — 结果值/最大值（如 "23/60"）
+      %VER3%   — 检定结果文字（如 "成功"、"大失败"）
     """
     template = templates.get(judgment, templates.get(JUDGMENT_SUCCESS, ""))
     result_str = f"{roll}/{skill_value}" if skill_value > 0 else str(roll)
+    judge_label = JUDGMENT_LABELS.get(judgment, "")
     
     reply = template.replace("%名称%", char_name or "")
-    reply = reply.replace("%技能/原因%", skill_name or "")
-    reply = reply.replace("%骰子结果（结果值/最大值）%", result_str)
+    reply = reply.replace("%VER1%", skill_name or "")
+    reply = reply.replace("%VER2%", result_str)
+    reply = reply.replace("%VER3%", judge_label)
     
     return reply

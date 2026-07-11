@@ -109,37 +109,37 @@
 			"dice_reply_ra": {
 				"type": "object",
 				"description": "技能检定(ra)回复词",
-				"hint": "技能检定后的回复文本。支持占位符 %名称% %技能/原因% %骰子结果（结果值/最大值）%。",
+				"hint": "占位符：%名称%（用户名） %VER1%（技能名） %VER2%（结果值/最大值） %VER3%（检定结果文字，如「成功」「大失败」）",
 				"items": {
 					"ra_critical_failure": {
 						"type": "string",
 						"description": "大失败",
-						"default": "%名称%的%技能/原因%检定大失败！（%骰子结果（结果值/最大值）%）"
+						"default": "%名称%的%VER1%检定%VER3%！（%VER2%）"
 					},
 					"ra_failure": {
 						"type": "string",
 						"description": "失败",
-						"default": "%名称%的%技能/原因%检定失败。（%骰子结果（结果值/最大值）%）"
+						"default": "%名称%的%VER1%检定%VER3%。（%VER2%）"
 					},
 					"ra_success": {
 						"type": "string",
 						"description": "成功",
-						"default": "%名称%的%技能/原因%检定成功。（%骰子结果（结果值/最大值）%）"
+						"default": "%名称%的%VER1%检定%VER3%。（%VER2%）"
 					},
 					"ra_hard_success": {
 						"type": "string",
 						"description": "困难成功",
-						"default": "%名称%的%技能/原因%检定困难成功！（%骰子结果（结果值/最大值）%）"
+						"default": "%名称%的%VER1%检定%VER3%！（%VER2%）"
 					},
 					"ra_extreme_success": {
 						"type": "string",
 						"description": "极难成功",
-						"default": "%名称%的%技能/原因%检定极难成功！！（%骰子结果（结果值/最大值）%）"
+						"default": "%名称%的%VER1%检定%VER3%！！（%VER2%）"
 					},
 					"ra_critical_success": {
 						"type": "string",
 						"description": "大成功",
-						"default": "%名称%的%技能/原因%检定大成功！！（%骰子结果（结果值/最大值）%）"
+						"default": "%名称%的%VER1%检定%VER3%！！（%VER2%）"
 					}
 				}
 			}

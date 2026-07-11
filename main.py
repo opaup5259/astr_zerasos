@@ -234,13 +234,18 @@ class ZerasosPlugin(Star):
             if re.match(r"^ra", lower):
                 ra_text = raw[2:].strip() if len(raw) > 2 else ""
                 ra_parsed = parse_ra(ra_text)
+                # 获取用户名
+                try:
+                    ra_name = event.message_obj.sender.nickname or platform_uid[:8]
+                except Exception:
+                    ra_name = platform_uid[:8] if platform_uid else ""
                 roll = self.dice_roller.roll(100, user_id=platform_uid or "_anonymous")
                 roll_val = roll["total"]
                 skill_val = ra_parsed["skill_value"]
                 judgment = judge_coc7th(roll_val, skill_val)
                 reply = format_ra_reply(
                     judgment, roll_val, skill_val,
-                    ra_parsed["skill_name"], "",
+                    ra_parsed["skill_name"], ra_name,
                     self.ra_replies,
                 )
                 yield event.plain_result(reply)
