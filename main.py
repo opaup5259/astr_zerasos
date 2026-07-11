@@ -51,7 +51,7 @@ from interop import (
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+互通+骰子+番茄+表情包", "2.0108")
+@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+互通+骰子+番茄+表情包", "2.0109")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
@@ -272,27 +272,56 @@ class ZerasosPlugin(Star):
                 yield event.plain_result(reply)
                 return
 
-            # ── .coc / 。coc — COC7th / COC5th 角色卡（严格匹配） ──
-            cm = re.match(r"^coc5x(\d*)$", lower)
-            if cm:
-                count = int(cm.group(1)) if cm.group(1) else 1
-                count = min(count, 10)
-                cards = [format_coc_char(roll_coc5th(), i+1) for i in range(count)]
-                yield event.plain_result(self._format_card_table(cards))
-                return
-
+            # ── .coc / 。coc — COC7th 角色卡（分批发送） ──
             cm = re.match(r"^coc(\d*)$", lower)
-            # coc5 → COC7th × 5, coc3 → COC7th × 3
             if cm:
                 num_str = cm.group(1)
-                if num_str == "5":
-                    # .coc5 = 5张COC7th
-                    count = 5
+                if num_str == "":
+                    batch_count = 1
+                elif num_str == "3":
+                    batch_count = 3
+                elif num_str == "5":
+                    batch_count = 5
                 else:
-                    count = int(num_str) if num_str else 1
-                count = min(count, 10)
-                cards = [format_coc_char(roll_coc7th(), i+1) for i in range(count)]
-                yield event.plain_result(self._format_card_table(cards))
+                    yield event.plain_result("用法: .coc / .coc3 / .coc5")
+                    return
+
+                # 获取用户名
+                try:
+                    username = event.message_obj.sender.nickname or ""
+                except Exception:
+                    username = ""
+
+                for batch_idx in range(batch_count):
+                    cards = [format_coc_char(roll_coc7th()) for _ in range(3)]
+
+                    # 提取每张卡的3行 → 共9行
+                    lines = []
+                    for c in cards:
+                        parts = c.split("\n")
+                        for p in parts[:3]:
+                            lines.append(p.strip())
+                    # 补足 9 行（不足补空）
+                    while len(lines) < 9:
+                        lines.append(" ")
+
+                    msg = (
+                        f"🎲 {username}的属性生成结果\n"
+                        f"\n| 序号 | 属性 |\n"
+                        f"\n| :--- | :--- |\n"
+                        f"\n| 1 | {lines[0]}<br/>{lines[1]}<br/>{lines[2]} |\n"
+                        f"\n| 2 | {lines[3]}<br/>{lines[4]}<br/>{lines[5]} |\n"
+                        f"\n| 3 | {lines[6]}<br/>{lines[7]}<br/>{lines[8]} |\n"
+                        f"\n\n"
+                        f"| .coc | .coc3 | .coc5 |\n"
+                        f"| :---: | :---: | :---: |\n"
+                        f"| 一次(3张) | 三次(9张) | 五次(15张) |"
+                    )
+                    yield event.plain_result(msg.replace("\n", "<br />"))
+
+                    if batch_idx < batch_count - 1:
+                        import asyncio
+                        await asyncio.sleep(1)
                 return
 
             # ── .dnd / 。dnd / /dnd — DND 5e 角色卡（严格匹配） ──
