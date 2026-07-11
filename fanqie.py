@@ -151,7 +151,7 @@ class FanqieManager:
             local_state = self.data["chapter_states"].get(novel_id, {})
             local_chapter_id = local_state.get("chapter_id", "")
 
-            if chapter_info["id"] == local_chapter_id:
+            if chapter_info["id"] == local_chapter_id and not is_debug:
                 if is_debug:
                     all_debug.append(f"[Debug] 《{novel_title}》已是最新")
                 continue
@@ -191,7 +191,7 @@ class FanqieManager:
 
             chapter_history = self.data["chapter_history"].get(novel_id, [])[:-1]
             custom_summary = self.novel_summaries.get(novel_id, "")
-            broadcast_msg, ai_debug_lines, ai_comment = await self.generate_broadcast(
+            ai_debug_lines, ai_comment = await self.generate_broadcast(
                 novel_title, volume_name, chapter_info,
                 result["update_time"], result["content"],
                 result.get("chapter_title", ""), result.get("word_count", ""),
@@ -217,9 +217,9 @@ class FanqieManager:
             all_debug.append(
                 f"[Debug] 《{novel_title}》更新！推送 {success_count}/{len(self.data.get('target_groups', []))} 个群"
             )
-            all_preview.append(broadcast_msg)
+            # all_preview.append(broadcast_msg) # 已移除
 
-        return "\n".join(all_debug), "\n\n".join(all_preview)
+        return "\n".join(all_debug), "" # 返回空的 preview
 
     # ── AI 播报生成 ───────────────────────────────
     async def generate_broadcast(self, novel_title, volume_name, chapter_info,
@@ -285,8 +285,6 @@ class FanqieManager:
             "直接对剧情做出反应即可，不要提你看了哪一章。"
         )
 
-        preset_prefix = f"小说更新啦！《{novel_title}》{chapter_info['title']}\n链接：{chapter_info['full_url']}"
-
         # ── Provider 获取 ──
         debug.append(f"[AI-DEBUG] persona_id='{self.persona_id}'")
         debug.append(f"[AI-DEBUG] prompt 长度={len(prompt)}")
@@ -300,8 +298,8 @@ class FanqieManager:
                 provider = all_providers[0] if len(all_providers) > 0 else None
 
         if not provider:
-            debug.append("[AI-DEBUG] ⚠️ 无可用 Provider，回退纯文本")
-            return (f"{preset_prefix}\n━━━━━━━━━━━━━━\n（AI生成失败：无可用Provider）", debug)
+            debug.append("[AI-DEBUG] ⚠️ 无可用 Provider")
+            return (debug, "") # 返回空吐槽
 
         # ── Persona ──
         system_prompt = ""
@@ -324,11 +322,11 @@ class FanqieManager:
                 ct = getattr(res, "completion_text", None)
                 if ct:
                     debug.append(f"[AI-DEBUG] AI 回复长度={len(ct)}")
-                    return (f"{preset_prefix}\n━━━━━━━━━━━━━━\n{ct}", debug, ct or "")
+                    return (debug, ct or "")
         except Exception as e:
             debug.append(f"[AI-DEBUG] AI 异常: {e}")
 
-        return (f"{preset_prefix}\n━━━━━━━━━━━━━━\n（AI生成失败）", debug, "")
+        return (debug, "") # AI 失败也返回空吐槽
 
     # ── HTML 解析 ─────────────────────────────────
     # ── HTTP 请求（通用） ──────────────────────────
