@@ -211,7 +211,7 @@ class ZerasosPlugin(Star):
             lower = raw.lower()
 
             # ── .dice set <面数> ──
-            if lower.startswith("dice set") or lower.startswith("骰子 set"):
+            if re.match(r"^dice set\s+\d+\s*$", lower) or re.match(r"^骰子 set\s+\d+\s*$", lower):
                 parts = raw.split()
                 if len(parts) >= 3 and parts[2].isdigit():
                     val = int(parts[2])
@@ -231,7 +231,7 @@ class ZerasosPlugin(Star):
                 return
 
             # ── .ra 技能检定 ──
-            if lower.startswith("ra") or lower.startswith("RA"):
+            if re.match(r"^ra", lower):
                 ra_text = raw[2:].strip() if len(raw) > 2 else ""
                 ra_parsed = parse_ra(ra_text)
                 roll = self.dice_roller.roll(100, user_id=platform_uid or "_anonymous")
@@ -246,46 +246,39 @@ class ZerasosPlugin(Star):
                 yield event.plain_result(reply)
                 return
 
-            # ── .coc / 。coc — COC7th / COC5th 角色卡 ──
-            # .coc       → 1张COC7th
-            # .coc 5     → 5张COC7th
-            # .coc5x1    → 1张COC5th
-            # .coc5x3    → 3张COC5th
-            if lower.startswith("coc5x"):
-                num_str = raw[5:].strip()
-                count = int(num_str) if num_str.isdigit() else 1
+            # ── .coc / 。coc — COC7th / COC5th 角色卡（严格匹配） ──
+            cm = re.match(r"^coc5x(\d*)$", lower)
+            if cm:
+                count = int(cm.group(1)) if cm.group(1) else 1
                 count = min(count, 10)
-                chars = [format_coc_char(roll_coc5th(), i+1) for i in range(count)]
-                yield event.plain_result("\n\n".join(chars))
+                for i in range(count):
+                    yield event.plain_result(format_coc_char(roll_coc5th(), i+1))
                 return
 
-            if lower.startswith("coc5") and not lower.startswith("coc5x"):
-                # coc5 后面的数字是生成数量
-                num_str = raw[3:].strip()
-                count = int(num_str) if num_str.isdigit() else 5
+            cm = re.match(r"^coc(\d*)$", lower)
+            # coc5 → COC7th × 5, coc3 → COC7th × 3
+            if cm:
+                num_str = cm.group(1)
+                if num_str == "5":
+                    # .coc5 = 5张COC7th
+                    count = 5
+                else:
+                    count = int(num_str) if num_str else 1
                 count = min(count, 10)
-                chars = [format_coc_char(roll_coc7th(), i+1) for i in range(count)]
-                yield event.plain_result("\n\n".join(chars))
+                for i in range(count):
+                    yield event.plain_result(format_coc_char(roll_coc7th(), i+1))
                 return
 
-            if lower.startswith("coc"):
-                num_str = raw[3:].strip()
-                count = int(num_str) if num_str.isdigit() else 1
+            # ── .dnd / 。dnd / /dnd — DND 5e 角色卡（严格匹配） ──
+            dm = re.match(r"^dnd(\d*)$", lower)
+            if dm:
+                count = int(dm.group(1)) if dm.group(1) else 1
                 count = min(count, 10)
-                chars = [format_coc_char(roll_coc7th(), i+1) for i in range(count)]
-                yield event.plain_result("\n\n".join(chars))
+                for i in range(count):
+                    yield event.plain_result(format_dnd_char(roll_dnd(), i+1))
                 return
 
-            # ── .dnd / 。dnd / /dnd — DND 5e 角色卡 ──
-            if lower.startswith("dnd"):
-                num_str = raw[3:].strip()
-                count = int(num_str) if num_str.isdigit() else 1
-                count = min(count, 10)
-                chars = [format_dnd_char(roll_dnd(), i+1) for i in range(count)]
-                yield event.plain_result("\n\n".join(chars))
-                return
-
-            # ── .r / .rd 掷骰（无表达式时使用已保存的骰子） ──
+            # ── .r / .rd 掷骰（严格匹配，无多余文本） ──
             parsed = parse_dice(raw)
             if parsed or lower in ('r', 'rd', 'R', 'RD'):
                 user_id = platform_uid or "_anonymous"
