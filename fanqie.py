@@ -140,7 +140,10 @@ class FanqieManager:
             info = await self.fetch_novel_info(novel_id)
 
             if not info or not info["chapter_info"]["id"]:
-                all_debug.append(f"[Debug] ID:{novel_id} 获取信息失败")
+                if is_debug:
+                    all_debug.append(f"[Debug] ID:{novel_id} 获取信息失败 (info={info is not None}, id={info.get('chapter_info', {}).get('id', 'N/A') if info else 'info is None'})")
+                else:
+                    all_debug.append(f"[Debug] ID:{novel_id} 获取信息失败")
                 continue
 
             novel_title = info["title"]
@@ -335,20 +338,23 @@ class FanqieManager:
     # ── HTTP 请求（通用） ──────────────────────────
     async def _http_get(self, url: str, headers: dict = None, expect_json=False):
         if not HAS_AIOHTTP:
+            logging.warning("[番茄] HAS_AIOHTTP=False，aiohttp 未安装！")
             return {} if expect_json else None
         default_headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         if headers:
             default_headers.update(headers)
         async with aiohttp.ClientSession() as session:
             try:
-                async with session.get(url, headers=default_headers, timeout=15) as resp:
+                async with session.get(url, headers=default_headers, timeout=aiohttp.ClientTimeout(total=15)) as resp:
                     resp.raise_for_status()
                     ct = resp.headers.get("Content-Type", "")
                     if expect_json or "application/json" in ct:
-                        return await resp.json(content_type=None)
+                        result = await resp.json(content_type=None)
+                        logging.debug(f"[番茄] HTTP GET {url[:60]}... -> JSON keys={list(result.keys()) if isinstance(result, dict) else type(result).__name__}")
+                        return result
                     return await resp.text()
             except Exception as e:
-                logging.error(f"[爬虫] 请求失败 {url}: {e}")
+                logging.error(f"[爬虫] 请求失败 {url[:80]}: {e}")
                 return {} if expect_json else None
 
     # ── Markdown 模板工具 ────────────────────────────
