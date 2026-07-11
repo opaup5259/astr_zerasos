@@ -1,4 +1,4 @@
-import os, sys, logging, importlib
+import os, sys, re, logging, importlib
 from typing import Optional
 
 # 禁止 Python 写入 .pyc，从源头杜绝字节码缓存问题
@@ -38,6 +38,7 @@ from interop import (
     has_cached_avatar, cache_avatar, download_avatar,
     set_http_session_maker,
     get_shared_data_dir,
+    bind_user_id, unbind_user_id, get_all_bindings,
 )
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -163,6 +164,24 @@ class ZerasosPlugin(Star):
         # ════════════════════════════════════════════════════
         if text and platform_uid:
             record_user_ids(umo, text, role, platform_uid)
+
+        # ════════════════════════════════════════════════════
+        # 用户手动绑定：@官方Bot 绑定qq <QQ号>
+        # 只由 secondary (QQ Official) 处理
+        # 绑定后该用户在两边签到数据共享
+        # ════════════════════════════════════════════════════
+        if role == "secondary" and event.is_at_or_wake_command and platform_uid:
+            match_bind = re.match(r"^(绑定qq|绑定QQ)\s*(\d{5,})\s*$", text.strip())
+            if match_bind:
+                qq_number = match_bind.group(2)
+                ok = bind_user_id(platform_uid, qq_number)
+                if ok:
+                    yield event.plain_result(
+                        f"已绑定。以后你在咱这边的签到数据就跟 QQ {qq_number} 同步了。"
+                    )
+                else:
+                    yield event.plain_result("绑定失败，检查QQ号是否正确。")
+                return
 
         # ════════════════════════════════════════════════════
         # 互通去重：自动判断 Primary/Secondary
@@ -428,28 +447,18 @@ class ZerasosPlugin(Star):
             if len(parts) < 3:
                 yield event.plain_result(
                     "用法:\n"
-                    "  /zer interop status     查看去重状态\n"
-                    "  /zer interop admin      查看管理员ID列表\n"
-                    "  /zer interop admin add <ID>   添加管理员ID\n"
-                    "  /zer interop admin del <ID>   移除管理员ID"
+                    "  /zer interop status     互通状态\n"
+                    "  /zer interop admin      管理员ID\n"
+                    "  /zer interop admin add/del <ID>  添加/移除\n"
+                    "  /zer interop bindings   查看用户绑定\n"
+                    "  /zer interop bind <openid> <QQ>   强制绑定\n"
+                    "  /zer interop unbind <openid>      解除绑定"
                 )
                 return
 
             icmd = parts[2].lower()
 
-            if icmd == "status":
-                from interop import _SHARED_STATE
-                pending = len(_SHARED_STATE.get("processing_locks", {}))
-                sent = len(_SHARED_STATE.get("sent_marks", {}))
-                admins = _SHARED_STATE.get("admin_ids", [])
-                yield event.plain_result(
-                    f"🌐 互通状态\n"
-                    f"处理中锁: {pending}\n"
-                    f"已发送标记: {sent}\n"
-                    f"管理员 ({len(admins)}人): {' '.join(admins) if admins else '未设置'}"
-                )
-
-            elif icmd == "admin":
+            if icmd == "admin":
                 admins = load_admin_ids()
                 if len(parts) >= 5:
                     adm_cmd = parts[3].lower()
@@ -472,6 +481,53 @@ class ZerasosPlugin(Star):
                         f"管理员ID列表 ({len(admins)}人):\n"
                         + ("\n".join(f"- {x}" for x in admins) if admins else "未设置")
                     )
+
+            elif icmd == "bind":
+                # /zer interop bind <openid> <QQ号>
+                if len(parts) >= 5:
+                    oid = parts[3]
+                    qq = parts[4]
+                    if bind_user_id(oid, qq):
+                        yield event.plain_result(f"✅ 已绑定 {oid[:20]} → {qq}")
+                    else:
+                        yield event.plain_result(f"❌ 绑定失败")
+                else:
+                    yield event.plain_result("用法: /zer interop bind <openid> <QQ号>")
+
+            elif icmd == "unbind":
+                # /zer interop unbind <openid>
+                if len(parts) >= 4:
+                    oid = parts[3]
+                    if unbind_user_id(oid):
+                        yield event.plain_result(f"✅ 已解除绑定 {oid[:20]}")
+                    else:
+                        yield event.plain_result(f"❌ 未找到绑定记录")
+                else:
+                    yield event.plain_result("用法: /zer interop unbind <openid>")
+
+            elif icmd == "bindings":
+                bindings = get_all_bindings()
+                if not bindings:
+                    yield event.plain_result("暂无绑定记录。")
+                else:
+                    lines = [f"用户绑定 ({len(bindings)} 条):"]
+                    for oid, qq in bindings.items():
+                        lines.append(f"  {oid[:24]}... → {qq}")
+                    yield event.plain_result("\n".join(lines))
+
+            elif icmd == "status":
+                from interop import _SHARED_STATE
+                pending = len(_SHARED_STATE.get("processing_locks", {}))
+                sent = len(_SHARED_STATE.get("sent_marks", {}))
+                admins = _SHARED_STATE.get("admin_ids", [])
+                bindings = _SHARED_STATE.get("user_bindings", {})
+                yield event.plain_result(
+                    f"🌐 互通状态\n"
+                    f"处理中锁: {pending}\n"
+                    f"已发送标记: {sent}\n"
+                    f"管理员 ({len(admins)}人): {' '.join(admins) if admins else '未设置'}\n"
+                    f"用户绑定 ({len(bindings)}条)"
+                )
             return
 
         # ── bqb ──

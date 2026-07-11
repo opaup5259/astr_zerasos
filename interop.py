@@ -339,17 +339,70 @@ def get_qq_from_openid(openid: str) -> Optional[str]:
     return None
 
 
+# ============================================================
+# 用户手动绑定（openid ↔ QQ号 持久化映射）
+# ============================================================
+
+def bind_user_id(openid: str, qq_number: str) -> bool:
+    """
+    绑定一个用户的 openid 到 QQ 号。
+    持久化保存，重启不丢。
+    """
+    if not openid or not qq_number:
+        return False
+    openid = openid.strip()
+    qq_number = qq_number.strip()
+    if not openid or not qq_number:
+        return False
+    _SHARED_STATE.setdefault("user_bindings", {})
+    _SHARED_STATE["user_bindings"][openid] = {
+        "qq": qq_number,
+        "time": time.time(),
+    }
+    _save_to_disk()
+    logger.info(f"[互通-绑定] {openid[:20]} → {qq_number}")
+    return True
+
+
+def unbind_user_id(openid: str) -> bool:
+    """解除 openid 的绑定"""
+    bindings = _SHARED_STATE.get("user_bindings", {})
+    if openid in bindings:
+        del bindings[openid]
+        _save_to_disk()
+        logger.info(f"[互通-绑定] 解除 {openid[:20]}")
+        return True
+    return False
+
+
+def get_all_bindings() -> dict:
+    """获取所有绑定记录 {openid: qq_number}"""
+    raw = _SHARED_STATE.get("user_bindings", {})
+    return {k: v["qq"] for k, v in raw.items()}
+
+
 def normalize_uid(uid: str) -> str:
     """
     将任意平台的用户 ID 归一化为标准 QQ 号。
     
-    如果 uid 是 openid 且已有映射到 QQ 号 → 返回 QQ 号
-    否则 → 返回原 uid（可能是 QQ 号或尚未映射的 openid）
-    
-    用于确保 checkin 等数据使用统一的 key 存储。
+    查询顺序：
+    1. 持久化绑定（用户手动绑定）
+    2. 内存映射（record_user_ids 自动建立的临时映射）
+    3. 回退原 ID
     """
+    if not uid:
+        return uid
+    # 1. 持久化绑定
+    bindings = _SHARED_STATE.get("user_bindings", {})
+    entry = bindings.get(uid)
+    if entry:
+        return entry["qq"]
+    # 2. 内存映射
     qq = get_qq_from_openid(uid)
-    return qq if qq else uid
+    if qq:
+        return qq
+    # 3. 原 ID
+    return uid
 
 
 # ============================================================
@@ -479,24 +532,28 @@ def _load_from_disk():
         with open(_STATE_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
         _SHARED_STATE["admin_ids"] = data.get("admin_ids", [])
+        _SHARED_STATE["user_bindings"] = data.get("user_bindings", {})
         logger.info(
-            f"[互通] 加载管理员列表 ({len(_SHARED_STATE['admin_ids'])} 人): "
-            f"{_SHARED_STATE['admin_ids']}"
+            f"[互通] 加载: 管理员 {len(_SHARED_STATE['admin_ids'])} 人, "
+            f"用户绑定 {len(_SHARED_STATE['user_bindings'])} 条"
         )
     except Exception as e:
         logger.error(f"[互通] 加载状态失败: {e}")
 
 
 def _save_to_disk():
-    """保存管理员 ID 到磁盘"""
+    """保存管理员 ID + 用户绑定到磁盘"""
     if not _STATE_FILE:
         return
     try:
-        data = {"admin_ids": _SHARED_STATE["admin_ids"]}
+        data = {
+            "admin_ids": _SHARED_STATE.get("admin_ids", []),
+            "user_bindings": _SHARED_STATE.get("user_bindings", {}),
+        }
         with open(_STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         logger.info(
-            f"[互通] 已保存管理员列表 ({len(_SHARED_STATE['admin_ids'])} 人)"
+            f"[互通] 已保存: 管理员 {len(data['admin_ids'])} 人, 用户绑定 {len(data['user_bindings'])} 条"
         )
     except Exception as e:
         logger.error(f"[互通] 保存状态失败: {e}")
