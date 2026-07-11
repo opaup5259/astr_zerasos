@@ -49,13 +49,6 @@
 		"description": "番茄更新推送",
 		"hint": "这是用爬虫实现的哈……",
 		"items": {
-			"markdown_mode": {
-				"type": "bool",
-				"description": "启用 Markdown 模板推送",
-				"hint": "开启后，番茄更新推送使用 QQ 官方 Bot 的 Markdown 模板（含封面图、简介、AI评价），而非纯文本。仅对 QQ 官方 Bot 渠道生效，三方 Bot 仍使用纯文本。需要先在 QQ 官方 Bot 上加一次 /zer fanqie add。",
-				"obvious_hint": true,
-				"default": false
-			},
 			"novel_ids": {
 				"type": "string",
 				"description": "番茄小说ID列表",

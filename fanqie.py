@@ -20,7 +20,6 @@ except ImportError:
 
 
 BASE_URL = "https://fanqienovel.com"
-MARKDOWN_TEMPLATE_ID = "102047593_1783778565"
 
 
 class FanqieManager:
@@ -38,7 +37,6 @@ class FanqieManager:
         self._load_data()
 
         self.task: Optional[asyncio.Task] = None
-        self.send_markdown_func = None  # 由 main.py 注入，用于发送 Markdown 模板消息
 
     # ── 配置解析 ──────────────────────────────────
     def _parse_config(self):
@@ -50,7 +48,6 @@ class FanqieManager:
         if not isinstance(fc, dict):
             fc = {}
 
-        self.markdown_mode = bool(fc.get("markdown_mode", False))
         self.check_interval_min = int(fc.get("check_interval", 10))
 
         raw_ids = str(fc.get("novel_ids", "7656265450392669208"))
@@ -148,7 +145,6 @@ class FanqieManager:
             volume_name = info["volume_name"]
             chapter_info = info["chapter_info"]
             novel_abstract = info["abstract"]
-            novel_cover_url = info.get("novel_cover_url", "")
 
             local_state = self.data["chapter_states"].get(novel_id, {})
             local_chapter_id = local_state.get("chapter_id", "")
@@ -170,10 +166,6 @@ class FanqieManager:
                 "chapter_id": chapter_info["id"],
                 "last_update_time": result["update_time"],
                 "content": result["content"],
-                "novel_cover_url": novel_cover_url,
-                "novel_abstract": novel_abstract,
-                "chapter_link": chapter_info["full_url"],
-                "novel_link": f"{BASE_URL}/novel/{novel_id}",
             }
 
             if novel_id not in self.data["chapter_history"]:
@@ -185,7 +177,6 @@ class FanqieManager:
                 "update_time": result["update_time"],
                 "volume_name": volume_name,
                 "novel_abstract": novel_abstract,
-                "novel_cover_url": novel_cover_url,
             })
             if len(self.data["chapter_history"][novel_id]) > 20:
                 self.data["chapter_history"][novel_id] = self.data["chapter_history"][novel_id][-20:]
@@ -193,7 +184,7 @@ class FanqieManager:
 
             chapter_history = self.data["chapter_history"].get(novel_id, [])[:-1]
             custom_summary = self.novel_summaries.get(novel_id, "")
-            broadcast_msg, ai_debug_lines, ai_comment = await self.generate_broadcast(
+            broadcast_msg, ai_debug_lines = await self.generate_broadcast(
                 novel_title, volume_name, chapter_info,
                 result["update_time"], result["content"],
                 result.get("chapter_title", ""), result.get("word_count", ""),
@@ -204,41 +195,23 @@ class FanqieManager:
 
             # ── 推送 ──
             msg_chain = MessageChain().message(broadcast_msg)
-            markdown_params = None
-            if self.markdown_mode and self.send_markdown_func:
-                markdown_params = self._prepare_markdown_params(
-                    self.data["chapter_states"][novel_id], novel_id, ai_comment
-                )
-
             success_count = 0
             for target in self.data.get("target_groups", []):
                 sent = False
-
-                # Markdown 模板优先（仅 QQ Official 渠道生效）
-                if markdown_params:
+                possible = [target]
+                if target.isdigit():
+                    possible.extend([
+                        f"default:GroupMessage:{target}",
+                        f"aiocqhttp-group-{target}",
+                        f"group_{target}", f"group-{target}", f"qq_group_{target}",
+                    ])
+                for umo in possible:
                     try:
-                        md_ok = await self.send_markdown_func(target, markdown_params)
-                        if md_ok:
-                            sent = True
-                    except Exception as e:
-                        logging.error(f"[番茄-推送] Markdown模板发送异常: {e}")
-
-                # 回退纯文本
-                if not sent:
-                    possible = [target]
-                    if target.isdigit():
-                        possible.extend([
-                            f"default:GroupMessage:{target}",
-                            f"aiocqhttp-group-{target}",
-                            f"group_{target}", f"group-{target}", f"qq_group_{target}",
-                        ])
-                    for umo in possible:
-                        try:
-                            await self.context.send_message(umo, msg_chain)
-                            sent = True
-                            break
-                        except Exception:
-                            continue
+                        await self.context.send_message(umo, msg_chain)
+                        sent = True
+                        break
+                    except Exception:
+                        continue
                 if sent:
                     success_count += 1
 
@@ -313,12 +286,7 @@ class FanqieManager:
             "直接对剧情做出反应即可，不要提你看了哪一章。"
         )
 
-        # 构建预设前缀
-        if self.markdown_mode:
-            # Markdown 模式下仅返回 AI 评论，无需前缀
-            preset_prefix = ""
-        else:
-            preset_prefix = f"小说更新啦！《{novel_title}》{chapter_info['title']}\n链接：{chapter_info['full_url']}"
+        preset_prefix = f"小说更新啦！《{novel_title}》{chapter_info['title']}\n链接：{chapter_info['full_url']}"
 
         # ── Provider 获取 ──
         debug.append(f"[AI-DEBUG] persona_id='{self.persona_id}'")
@@ -334,7 +302,7 @@ class FanqieManager:
 
         if not provider:
             debug.append("[AI-DEBUG] ⚠️ 无可用 Provider，回退纯文本")
-            return (f"{preset_prefix}\n━━━━━━━━━━━━━━\n（AI生成失败：无可用Provider）" if preset_prefix else "", debug, "")
+            return (f"{preset_prefix}\n━━━━━━━━━━━━━━\n（AI生成失败：无可用Provider）", debug)
 
         # ── Persona ──
         system_prompt = ""
@@ -357,11 +325,11 @@ class FanqieManager:
                 ct = getattr(res, "completion_text", None)
                 if ct:
                     debug.append(f"[AI-DEBUG] AI 回复长度={len(ct)}")
-                    return (f"{preset_prefix}\n━━━━━━━━━━━━━━\n{ct}" if preset_prefix else ct, debug, ct or "")
+                    return (f"{preset_prefix}\n━━━━━━━━━━━━━━\n{ct}", debug)
         except Exception as e:
             debug.append(f"[AI-DEBUG] AI 异常: {e}")
 
-        return (f"{preset_prefix}\n━━━━━━━━━━━━━━\n（AI生成失败）" if preset_prefix else "（AI生成失败）", debug, "")
+        return (f"{preset_prefix}\n━━━━━━━━━━━━━━\n（AI生成失败）", debug)
 
     # ── HTML 解析 ─────────────────────────────────
     # ── HTTP 请求（通用） ──────────────────────────
@@ -382,18 +350,6 @@ class FanqieManager:
             except Exception as e:
                 logging.error(f"[爬虫] 请求失败 {url}: {e}")
                 return {} if expect_json else None
-
-    # ── Markdown 工具 ────────────────────────────────
-    @staticmethod
-    def escape_md(text: str) -> str:
-        """转义 Markdown 特殊字符，避免模板渲染出错"""
-        if not text:
-            return ""
-        text = str(text)
-        escape_chars = r'\`*_{}[]()#+-.!|~'
-        for c in escape_chars:
-            text = text.replace(c, '\\' + c)
-        return text
 
     @staticmethod
     def _extract_initial_state(html: str) -> Optional[dict]:
@@ -475,26 +431,11 @@ class FanqieManager:
                     if m_match:
                         novel_abstract = m_match.group(1)[:300]
 
-        # 提取封面图 URL（从 reader 页面的 HTML 中解析）
-        novel_cover_url = ""
-        if html:
-            if HAS_BS4:
-                soup = BeautifulSoup(html, "html.parser")
-                img = soup.select_one("img.book-cover-img")
-                if img and img.get("src"):
-                    novel_cover_url = img["src"]
-            else:
-                import re as _re
-                m = _re.search(r'<img[^>]*class="book-cover-img[^"]*"[^>]*src="([^"]+)"', html)
-                if m:
-                    novel_cover_url = m.group(1)
-
         return {
             "title": novel_title,
             "abstract": novel_abstract,
             "volume_name": volume_name,
             "chapter_info": chapter_info,
-            "novel_cover_url": novel_cover_url,
         }
 
     async def fetch_chapter_detail_async(self, url: str) -> dict:
@@ -538,24 +479,3 @@ class FanqieManager:
             "chapter_title": chapter_title,
             "word_count": word_count,
         }
-
-    # ── Markdown 模板参数构建 ──────────────────────────
-    def _prepare_markdown_params(self, chapter_state: dict, novel_id: str, ai_comment: str) -> list[dict]:
-        """构建 Markdown 模板的 params 参数列表"""
-        novel_cover_url = chapter_state.get("novel_cover_url", "")
-        novel_title = chapter_state.get("novel_title", "")
-        novel_link = chapter_state.get("novel_link", f"{BASE_URL}/novel/{novel_id}")
-        chapter_title = chapter_state.get("chapter_title", "")
-        chapter_link = chapter_state.get("chapter_link", f"{BASE_URL}/reader/{chapter_state.get('chapter_id', '')}")
-        abstract = chapter_state.get("novel_abstract", "")
-
-        params = [
-            {"key": "urlfm", "values": [novel_cover_url]},
-            {"key": "name", "values": [novel_title]},
-            {"key": "url1", "values": [novel_link]},
-            {"key": "name2", "values": [chapter_title]},
-            {"key": "content1", "values": [self.escape_md(abstract)]},
-            {"key": "content2", "values": [self.escape_md(ai_comment)]},
-            {"key": "url2", "values": [chapter_link]},
-        ]
-        return params
