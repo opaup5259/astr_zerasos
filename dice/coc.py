@@ -151,8 +151,6 @@ def format_coc_char(char: dict, index: int = 0) -> str:
     """格式化一张角色卡为 COC7th 面板格式"""
     attrs = char["attrs"]
     lines = []
-    if index > 0:
-        lines.append(f"—— 第 {index} 张 ——")
     x5vals = {k: a["value"] * 5 for k, a in attrs.items()}
     total = sum(x5vals.values())
     attr_line = "  ".join(f"{a['name']}:{x5vals[k]:>2}" for k, a in attrs.items())

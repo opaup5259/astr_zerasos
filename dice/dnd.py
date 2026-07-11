@@ -50,15 +50,8 @@ def format_dnd_char(char: dict, index: int = 0) -> str:
     """格式化一张 DND 角色卡为面板格式"""
     attrs = char["attrs"]
     lines = []
-    if index > 0:
-        lines.append(f"—— 第 {index} 张 ——")
-    
-    # \u5c5e\u6027
     attr_items = "  ".join(f"{k}:{v:>2}" for k, v in attrs.items())
     lines.append(attr_items)
-    
-    # \u72b6\u6001
     mods = "  ".join(f"{k[:2]}\u8c03:{char['con_mod']:+d}" for k in ["\u4f53\u8d28"])
     lines.append(f"  HP:{char['hp']}  {mods}  \u719f\u7ec3:{char['proficiency']}")
-    
     return "\n".join(lines)
