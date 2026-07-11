@@ -286,13 +286,15 @@ class ZerasosPlugin(Star):
                     yield event.plain_result("用法: .coc / .coc3 / .coc5")
                     return
 
-                # 获取用户名
                 username = event.get_sender_name()
+
+                # QQ开放平台Markdown模板ID + 按钮
+                COC_TEMPLATE_ID = "102047593_1783759782"
 
                 for batch_idx in range(batch_count):
                     cards = [format_coc_char(roll_coc7th()) for _ in range(3)]
 
-                    # 提取每张卡的3行
+                    # 提取每张卡的3行 → 9个参数 c1-c9
                     lines = []
                     for c in cards:
                         parts = c.split("\n")
@@ -301,24 +303,44 @@ class ZerasosPlugin(Star):
                     while len(lines) < 9:
                         lines.append(" ")
 
-                    # 构建Markdown内容（QQ官方Bot原生Markdown，无需模板）
-                    md_content = (
-                        f"### 🎲 {username}的属性生成结果\n"
-                        f"\n| 序号 | 属性 |\n"
-                        f"\n| :--- | :--- |\n"
-                        f"\n| **1** | {lines[0]}<br/>{lines[1]}<br/>{lines[2]} |\n"
-                        f"\n| **2** | {lines[3]}<br/>{lines[4]}<br/>{lines[5]} |\n"
-                        f"\n| **3** | {lines[6]}<br/>{lines[7]}<br/>{lines[8]} |"
-                    )
+                    params = []
+                    for j, line in enumerate(lines):
+                        params.append({"key": f"c{j+1}", "values": [line]})
+                    params.append({"key": "username", "values": [username]})
 
-                    payload = {"markdown": {"content": md_content}}
+                    # 内联按钮（三个一排）
+                    keyboard = {
+                        "rows": [
+                            {
+                                "buttons": [
+                                    {
+                                        "id": "coc",
+                                        "render_data": {"label": "生成一次", "visited_label": "已生成", "style": 1},
+                                        "action": {"type": 2, "permission": {"type": 2}, "click_limit": 10, "data": "coc_reroll_1"},
+                                    },
+                                    {
+                                        "id": "coc3",
+                                        "render_data": {"label": "生成三次", "visited_label": "已生成", "style": 1},
+                                        "action": {"type": 2, "permission": {"type": 2}, "click_limit": 10, "data": "coc_reroll_3"},
+                                    },
+                                    {
+                                        "id": "coc5",
+                                        "render_data": {"label": "生成五次", "visited_label": "已生成", "style": 1},
+                                        "action": {"type": 2, "permission": {"type": 2}, "click_limit": 10, "data": "coc_reroll_5"},
+                                    },
+                                ]
+                            }
+                        ]
+                    }
+
                     raw = event.message_obj.raw_message
                     msg_id = event.message_obj.message_id
 
                     if hasattr(raw, "group_openid") and raw.group_openid:
                         await event.bot.api.post_group_message(
                             group_openid=raw.group_openid,
-                            markdown={"content": md_content},
+                            markdown={"custom_template_id": COC_TEMPLATE_ID, "params": params},
+                            keyboard=keyboard,
                             msg_type=2,
                             msg_id=msg_id,
                             msg_seq=random.randint(1, 10000),
@@ -326,18 +348,17 @@ class ZerasosPlugin(Star):
                     elif hasattr(raw, "author") and hasattr(raw.author, "user_openid"):
                         await event.post_c2c_message(
                             openid=raw.author.user_openid,
-                            markdown={"content": md_content},
+                            markdown={"custom_template_id": COC_TEMPLATE_ID, "params": params},
+                            keyboard=keyboard,
                             msg_type=2,
                             msg_id=msg_id,
                             msg_seq=random.randint(1, 10000),
                         )
                     else:
-                        yield event.plain_result(md_content)
-
-                    if batch_idx < batch_count - 1:
-                        import asyncio
-                        await asyncio.sleep(1)
-                return
+                        yield event.plain_result(
+                            f"🎲 {username}的属性生成结果\n"
+                            + "\n".join(f"卡{i//3+1}行{i%3+1}: {lines[i]}" for i in range(9))
+                        )
 
             # ── .dnd / 。dnd / /dnd — DND 5e 角色卡（严格匹配） ──
             dm = re.match(r"^dnd(\d*)$", lower)
