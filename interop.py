@@ -39,19 +39,29 @@ _LOCK_TTL: float = 15.0             # 去重锁有效期（秒）
 _DEDUP_LOCK = threading.Lock()
 _AVATAR_LOCK = threading.Lock()
 
-# 当前实例的平台角色（由插件 init 时设置）
-_CURRENT_PLATFORM_ROLE: str = "primary"
+# 平台自动检测 — 从 unified_msg_origin 识别
+# primary   = OneBot v11（三方bot，QQ号形式 user_id）
+# secondary = QQ Official（官方bot，openid 形式 user_id）
 
-
-def set_platform_role(role: str):
-    """设置当前 Bot 实例的平台角色（primary / secondary）"""
-    global _CURRENT_PLATFORM_ROLE
-    _CURRENT_PLATFORM_ROLE = role
-
-
-def get_platform_role() -> str:
-    """获取当前 Bot 实例的平台角色"""
-    return _CURRENT_PLATFORM_ROLE
+def detect_role(umo: str) -> str:
+    """
+    从 unified_msg_origin 自动检测当前消息来自哪个平台，返回角色标识。
+    
+    primary   — OneBot v11（aiocqhttp/onebot 协议）
+    secondary — QQ Official 官方 API
+    
+    若无法识别，默认返回 primary。
+    """
+    if not umo:
+        return "primary"
+    umo_lower = umo.lower()
+    # OneBot v11 系列
+    if any(umo_lower.startswith(p) for p in ("aiocqhttp", "onebot", "cqhttp")):
+        return "primary"
+    # QQ Official 系列
+    if any(umo_lower.startswith(p) for p in ("qqofficial", "qq_official", "qqofficial")):
+        return "secondary"
+    return "primary"
 
 
 # ============================================================
@@ -61,36 +71,33 @@ def get_platform_role() -> str:
 _SHARED_DATA_DIR: Optional[str] = None
 
 
+_PLUGIN_DIR_FOR_DATA: Optional[str] = None
+
+
 def get_shared_data_dir() -> str:
-    """获取共享数据目录（两个Bot实例共用的固定路径）"""
-    assert _SHARED_DATA_DIR is not None, "interop 未初始化，请先调用 init()"
+    """获取共享数据目录。两个Bot实例基于同一插件路径推导，结果一致。"""
+    global _SHARED_DATA_DIR
+    if _SHARED_DATA_DIR is None:
+        # 基于插件目录推导共享路径（两个Bot的插件目录相同）
+        _PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
+        _SHARED_DATA_DIR = os.path.normpath(
+            os.path.join(_PLUGIN_DIR, "..", ".zerasos_shared_data")
+        )
+        os.makedirs(_SHARED_DATA_DIR, exist_ok=True)
     return _SHARED_DATA_DIR
 
 
-def init_primary(data_dir: str):
+def init():
     """
-    主 Bot（primary）初始化互通模块。
-    固定共享数据目录为自身的 data_dir，后续所有 Bot 实例均使用此路径。
-    """
-    global _STATE_FILE, _SHARED_DATA_DIR
-    _SHARED_DATA_DIR = data_dir
-    os.makedirs(_SHARED_DATA_DIR, exist_ok=True)
-    _STATE_FILE = os.path.join(_SHARED_DATA_DIR, "interop_state.json")
-    _load_from_disk()
-    set_avatar_cache_dir(_SHARED_DATA_DIR)
-
-
-def init_secondary():
-    """
-    从 Bot（secondary）初始化互通模块。
-    不覆盖共享目录，仅加载已有的共享状态。
+    初始化互通模块。
+    每次调用都确保共享目录已就绪、状态文件已加载。
+    两个 Bot 实例调用相同函数，路径由 get_shared_data_dir() 统一推导。
     """
     global _STATE_FILE, _SHARED_DATA_DIR
-    if _SHARED_DATA_DIR is None:
-        # 主 Bot 还没初始化？先保留，稍后 main.py 中会被强制覆盖
-        return
-    _STATE_FILE = os.path.join(_SHARED_DATA_DIR, "interop_state.json")
+    data_dir = get_shared_data_dir()
+    _STATE_FILE = os.path.join(data_dir, "interop_state.json")
     _load_from_disk()
+    set_avatar_cache_dir(data_dir)
 
 
 # ============================================================
@@ -274,20 +281,14 @@ async def download_avatar(uid: str) -> Optional[bytes]:
         except Exception:
             pass
 
-    # 2. 确定实际用于下载的 QQ 号
-    qq_number = uid  # 默认直接用 uid（OneBot v11 场景）
+    # 2. 尝试通过映射找到 QQ 号（QQ Official 平台 uid 是 openid）
+    qq_number = uid
+    mapped_qq = get_qq_from_openid(uid)
+    if mapped_qq:
+        qq_number = mapped_qq
+        record_avatar_qq(uid, mapped_qq)
 
-    if _CURRENT_PLATFORM_ROLE == "secondary":
-        # QQ Official 平台：uid 是 openid，需要映射到 QQ 号
-        mapped_qq = get_qq_from_openid(uid)
-        if mapped_qq:
-            qq_number = mapped_qq
-            record_avatar_qq(uid, mapped_qq)
-        else:
-            logger.warning(f"[互通-头像] 未找到 openid {uid[:20]} 对应的 QQ 号")
-            return None
-
-    # 3. 通过 qlogo.cn 下载
+    # 3. 通过 qlogo.cn 下载（如果是 openid + 没映射到 QQ号，此步会失败）
     if not _HTTP_SESSION_MAKER:
         return None
 

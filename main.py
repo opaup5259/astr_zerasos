@@ -29,60 +29,40 @@ for _mod in list(sys.modules.keys()):
 from checkin import CheckinManager, set_interop_download_avatar
 from fanqie import FanqieManager
 from bqb import BqbManager
-from interop import init_primary as interop_init_primary
-from interop import init_secondary as interop_init_secondary
+from interop import init as interop_init
+from interop import detect_role
 from interop import (
     should_respond, mark_sent, is_admin,
     load_admin_ids, set_admin_ids, add_admin_id,
     record_user_ids, get_qq_from_openid,
     has_cached_avatar, cache_avatar, download_avatar,
-    set_platform_role, set_http_session_maker,
+    set_http_session_maker,
     get_shared_data_dir,
 )
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+番茄监控+表情包+互通", "1.3201")
+@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+番茄监控+表情包+互通", "1.3204")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
         self.config = config or {}
 
-        # ── data_dir（先用自己的初始化 interop，再改成共享路径） ──
-        _bot_data_dir = str(StarTools.get_data_dir("zerasos_bot"))
-        os.makedirs(_bot_data_dir, exist_ok=True)
-
-        # ── 平台角色 ──
-        self.platform_role = str(self.config.get("platform_role", "primary"))
-
-        # ── Interop 互通模块 ──
-        # 主Bot（primary）固定共享目录为自己的 data_dir
-        # 从Bot（secondary）读取主Bot的共享目录，不覆盖
-        if self.platform_role == "primary":
-            interop_init_primary(_bot_data_dir)
-        else:
-            # 如果主Bot还没初始化（启动顺序问题），强制用自身路径
-            interop_init_secondary()
-            try:
-                _ = get_shared_data_dir()
-            except AssertionError:
-                # 主Bot未初始化，临时用自身路径
-                interop_init_primary(_bot_data_dir)
-
-        # ⚠️ 所有子模块使用共享 data_dir，保证两 Bot 数据互通
+        # ── data_dir（共享路径，两个Bot实例基于同一插件目录推导） ──
+        interop_init()
         data_dir = get_shared_data_dir()
         os.makedirs(data_dir, exist_ok=True)
 
+        logger.info(f"[泽拉索斯] 共享数据目录: {data_dir}")
+
         self._init_admin_ids()
-        set_platform_role(self.platform_role)
         set_http_session_maker(lambda: None)
         try:
             from interop import download_avatar as _ia
             set_interop_download_avatar(_ia)
         except Exception as e:
             logger.warning(f"[泽拉索斯] 头像代理注入失败: {e}")
-        logger.info(f"[泽拉索斯] 互通模式: platform_role={self.platform_role}")
 
         # ── Checkin（共享 data_dir） ──
         enable_checkin = bool(self.config.get("enable_checkin", True))
@@ -159,8 +139,6 @@ class ZerasosPlugin(Star):
     def on_config_update(self, config: dict):
         self.config = config or {}
 
-        # 互通配置热更新
-        self.platform_role = str(self.config.get("platform_role", "primary"))
         self._init_admin_ids()
 
         self.cm.update_config(
@@ -181,6 +159,9 @@ class ZerasosPlugin(Star):
         umo = getattr(event, 'unified_msg_origin', '')
         has_images = bool(self.bqb._extract_images(event))
 
+        # ── 自动检测本消息来自哪个平台 ──
+        role = detect_role(umo)
+
         # ── 提取本平台用户 ID ──
         try:
             platform_uid = str(event.message_obj.sender.user_id)
@@ -192,15 +173,15 @@ class ZerasosPlugin(Star):
         # 用于建立 openid ↔ QQ 号的映射（头像代理等）
         # ════════════════════════════════════════════════════
         if text and platform_uid:
-            record_user_ids(umo, text, self.platform_role, platform_uid)
+            record_user_ids(umo, text, role, platform_uid)
 
         # ════════════════════════════════════════════════════
-        # 互通去重：根据 platform_role 判断是否应当处理此消息
-        # primary  → 直接处理并标记已发送
-        # secondary → 检测 primary 是否已处理/已发送
+        # 互通去重：自动判断 Primary/Secondary
+        # primary (OneBot v11)  → 直接处理并标记已发送
+        # secondary (QQ Official) → 检测 primary 是否已处理/已发送
         # ════════════════════════════════════════════════════
         if text and not text.startswith("/"):
-            should_handle = should_respond(umo, text, self.platform_role)
+            should_handle = should_respond(umo, text, role)
         else:
             should_handle = True
 
@@ -226,7 +207,7 @@ class ZerasosPlugin(Star):
                 if bqb_path:
                     # BQB 发送前也标记互通
                     if text:
-                        mark_sent(umo, text, self.platform_role)
+                        mark_sent(umo, text, role)
                     yield event.image_result(bqb_path)
 
         # ── 签到逻辑 ──
@@ -273,7 +254,7 @@ class ZerasosPlugin(Star):
         if result:
             # 签到回复：标记互通
             if text:
-                mark_sent(umo, text, self.platform_role)
+                mark_sent(umo, text, role)
             yield self._render_result(event, result)
 
     # =================== 指令代理 ===================
@@ -344,7 +325,7 @@ class ZerasosPlugin(Star):
                 "\n"
                 "═══════════════════════════════════════\n"
                 "💡 WebUI 配置签到/番茄/表情包参数\n"
-                "💡 互通角色：primary=三方Bot  secondary=官方Bot\n"
+                "💡 互通角色：自动识别 OneBot v11=主 / QQ Official=从\n"
             )
             return
 
@@ -474,7 +455,6 @@ class ZerasosPlugin(Star):
                 admins = _SHARED_STATE.get("admin_ids", [])
                 yield event.plain_result(
                     f"🌐 互通状态\n"
-                    f"平台角色: {self.platform_role}\n"
                     f"处理中锁: {pending}\n"
                     f"已发送标记: {sent}\n"
                     f"管理员 ({len(admins)}人): {' '.join(admins) if admins else '未设置'}"
