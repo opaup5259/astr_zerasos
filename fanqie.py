@@ -398,10 +398,13 @@ class FanqieManager:
         ai_comment = ai_comment.strip()
         ai_comment = '\n> '.join(line for line in ai_comment.split('\n') if line.strip())
 
+        # 封面图：CDN 拉 2x 大图，Markdown 指定显示尺寸（2:3 书封比例）
+        cover_url_2x = re.sub(r'tplv-resize:\d+:', 'tplv-resize:450:', novel_cover_url) if novel_cover_url else ""
+
         # 替换模板占位符
         md_content = (
             f"### 📢 小说更新提醒\n"
-            f"![封面]({novel_cover_url})\n\n"
+            f"![封面#225px#338px]({cover_url_2x})\n\n"
             f"**书名**：[{novel_title}]({novel_link})\n"
             f"**章节**：{chapter_title}\n\n"
             f"------\n\n"
