@@ -51,7 +51,7 @@ from interop import (
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+互通+骰子+番茄+表情包", "2.0101")
+@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+互通+骰子+番茄+表情包", "2.0108")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
