@@ -286,14 +286,13 @@ class ZerasosPlugin(Star):
                     yield event.plain_result("用法: .coc / .coc3 / .coc5")
                     return
 
-                # TODO: 将 备忘.md 中的模板JSON提交到QQ开放平台后替换为实际ID
-                COC_TEMPLATE_ID = "你的Markdown模板ID"
-                COC_KEYBOARD_ID = "你的按钮模板ID"
+                # 获取用户名
+                username = event.get_sender_name()
 
                 for batch_idx in range(batch_count):
                     cards = [format_coc_char(roll_coc7th()) for _ in range(3)]
 
-                    # 提取每张卡的3行 → 9个参数 c1-c9
+                    # 提取每张卡的3行
                     lines = []
                     for c in cards:
                         parts = c.split("\n")
@@ -302,42 +301,36 @@ class ZerasosPlugin(Star):
                     while len(lines) < 9:
                         lines.append(" ")
 
-                    params = []
-                    for j, line in enumerate(lines):
-                        params.append({"key": f"c{j+1}", "values": [line]})
-                    params.append({"key": "username", "values": [event.get_sender_name()]})
+                    # 构建Markdown内容（QQ官方Bot原生Markdown，无需模板）
+                    md_content = (
+                        f"### 🎲 {username}的属性生成结果\n"
+                        f"\n| 序号 | 属性 |\n"
+                        f"\n| :--- | :--- |\n"
+                        f"\n| **1** | {lines[0]}<br/>{lines[1]}<br/>{lines[2]} |\n"
+                        f"\n| **2** | {lines[3]}<br/>{lines[4]}<br/>{lines[5]} |\n"
+                        f"\n| **3** | {lines[6]}<br/>{lines[7]}<br/>{lines[8]} |"
+                    )
 
-                    md_payload = {
-                        "custom_template_id": COC_TEMPLATE_ID,
-                        "params": params,
-                    }
-                    kb_payload = {"id": COC_KEYBOARD_ID}
-
+                    payload = {"markdown": {"content": md_content}}
                     raw = event.message_obj.raw_message
                     msg_id = event.message_obj.message_id
 
                     if hasattr(raw, "group_openid") and raw.group_openid:
                         await event.bot.api.post_group_message(
                             group_openid=raw.group_openid,
-                            markdown=md_payload,
-                            keyboard=kb_payload,
+                            markdown={"content": md_content},
                             msg_id=msg_id,
                             msg_seq=random.randint(1, 10000),
                         )
                     elif hasattr(raw, "author") and hasattr(raw.author, "user_openid"):
                         await event.post_c2c_message(
                             openid=raw.author.user_openid,
-                            markdown=md_payload,
-                            keyboard=kb_payload,
+                            markdown={"content": md_content},
                             msg_id=msg_id,
                             msg_seq=random.randint(1, 10000),
                         )
                     else:
-                        # 非QQOfficial平台降级为纯文本
-                        yield event.plain_result(
-                            f"🎲 {event.get_sender_name()}的属性生成结果\n"
-                            + "\n".join(f"卡{i//3+1}行{i%3+1}: {lines[i]}" for i in range(9))
-                        )
+                        yield event.plain_result(md_content)
 
                     if batch_idx < batch_count - 1:
                         import asyncio
