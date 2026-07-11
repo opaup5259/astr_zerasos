@@ -165,7 +165,7 @@ def format_coc_char(char: dict, index: int = 0) -> str:
     # 幸运 / DB / 总值
     lines.append(f"幸运:{char['luck']}  DB: {char['damage_bonus']}  总值:{total}/{total + char['luck']}")
     
-    return "\n".join(lines)
+    return " | ".join(lines)
 
 
 # ── COC5th ──
