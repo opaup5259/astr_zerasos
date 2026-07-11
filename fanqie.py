@@ -1,9 +1,9 @@
 """
 番茄小说更新监控模块 - 由主插件统一管理生命周期
 """
-import json, os, logging, re, asyncio
+import json, os, logging, re, asyncio, traceback
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 # from astrbot.api.all import MessageChain
 
 try:
@@ -210,7 +210,9 @@ class FanqieManager:
 
             success_count = 0
             for target in self.data.get("target_groups", []):
-                sent = await self._try_send_markdown(target, md_content)
+                sent, send_log = await self._try_send_markdown(target, md_content, is_debug)
+                if is_debug:
+                    all_debug.extend(send_log)
                 if sent:
                     success_count += 1
 
@@ -382,39 +384,46 @@ class FanqieManager:
         )
         return md_content
 
-    async def _try_send_markdown(self, target: str, md_content: str) -> bool:
+    async def _try_send_markdown(self, target: str, md_content: str, is_debug: bool = False) -> tuple[bool, List[str]]:
         """尝试通过 QQ Official Bot API 发送原生 Markdown 消息"""
-        logging.info(f"[番茄] 准备向 {target[:24]} 推送 Markdown...")
+        log_lines = []
+        _log = lambda msg: log_lines.append(msg) if is_debug else logging.info(msg)
+
+        _log(f"[番茄] 准备向 {target[:24]} 推送 Markdown...")
 
         bot = getattr(self.plugin, "bot", None)
         if not bot and hasattr(self.plugin, "bots") and isinstance(self.plugin.bots, dict):
             for b in self.plugin.bots.values():
                 if hasattr(b, "api"):
                     bot = b
-                    logging.info(f"[番茄] 从备选 bots 找到 bot: {b}")
+                    _log(f"[番茄] 从备选 bots 找到 bot: {b}")
                     break
         
         if not bot or not hasattr(bot, "api"):
-            logging.warning("[番茄] 无法获取 bot.api 实例，推送失败。")
-            return False
+            _log("[番茄] 无法获取 bot.api 实例，推送失败。")
+            return False, log_lines
 
         group_openid = self._extract_group_openid(target)
         if not group_openid:
-            logging.warning(f"[番茄] 无法从目标 '{target}' 提取 group_openid，推送失败。")
-            return False
+            _log(f"[番茄] 无法从目标 '{target}' 提取 group_openid，推送失败。")
+            return False, log_lines
 
-        logging.info(f"[番茄] 目标 group_openid: {group_openid}")
+        _log(f"[番茄] 目标 group_openid: {group_openid}")
         try:
             body = {
                 "markdown": {"content": md_content},
                 "msg_type": 2,
             }
             await bot.api.post_group_message(group_openid=group_openid, **body)
-            logging.info(f"[番茄] Markdown 推送成功 -> {target[:24]}")
-            return True
+            _log(f"[番茄] Markdown 推送成功 -> {target[:24]}")
+            return True, log_lines
         except Exception as e:
-            logging.error(f"[番茄] Markdown 推送异常 ({target[:24]}): {e}", exc_info=True)
-            return False
+            err_msg = f"[番茄] Markdown 推送异常 ({target[:24]}): {e}\n{traceback.format_exc()}"
+            if is_debug:
+                log_lines.append(err_msg)
+            else:
+                logging.error(err_msg)
+            return False, log_lines
 
     @staticmethod
     def _extract_group_openid(target: str) -> Optional[str]:
