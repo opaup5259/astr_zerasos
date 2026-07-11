@@ -148,11 +148,11 @@ def roll_coc7th() -> dict:
 
 
 def format_coc_char(char: dict, index: int = 0) -> str:
-    """格式化一张角色卡为文本"""
+    """格式化一张角色卡为 COC7th 面板格式"""
     attrs = char["attrs"]
     lines = []
     if index > 0:
-        lines.append(f"---- 第 {index} 张 ----")
+        lines.append(f"| -- 第 {index} 张 -- |")
     
     # 属性 x5
     x5vals = {k: a["value"] * 5 for k, a in attrs.items()}
@@ -165,24 +165,7 @@ def format_coc_char(char: dict, index: int = 0) -> str:
     # 幸运 / DB / 总值
     lines.append(f"幸运:{char['luck']}  DB: {char['damage_bonus']}  总值:{total}/{total + char['luck']}")
     
-    return " | ".join(lines)
-
-
-# ── COC5th ──
-
-COC5_ATTRS = {
-    "STR": "力量",
-    "CON": "体质",
-    "DEX": "敏捷",
-    "POW": "意志",
-    "APP": "外貌",
-    "SIZ": "体型",
-    "INT": "智力",
-    "EDU": "教育",
-}
-
-
-def roll_coc5th() -> dict:
+    return "\n".join(lines)def roll_coc5th() -> dict:
     """
     生成一张 COC5th 角色卡。
     COC5th 与 COC7th 在基础属性上相似，但衍生计算略有不同。
