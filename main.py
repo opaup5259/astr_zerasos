@@ -264,7 +264,7 @@ class ZerasosPlugin(Star):
                 count = int(cm.group(1)) if cm.group(1) else 1
                 count = min(count, 10)
                 cards = [format_coc_char(roll_coc5th(), i+1) for i in range(count)]
-                yield event.plain_result("\n\n".join(cards))
+                yield "\n".join(cards)
                 return
 
             cm = re.match(r"^coc(\d*)$", lower)
@@ -278,7 +278,7 @@ class ZerasosPlugin(Star):
                     count = int(num_str) if num_str else 1
                 count = min(count, 10)
                 cards = [format_coc_char(roll_coc7th(), i+1) for i in range(count)]
-                yield event.plain_result("\n\n".join(cards))
+                yield "\n".join(cards)
                 return
 
             # ── .dnd / 。dnd / /dnd — DND 5e 角色卡（严格匹配） ──
@@ -287,7 +287,7 @@ class ZerasosPlugin(Star):
                 count = int(dm.group(1)) if dm.group(1) else 1
                 count = min(count, 10)
                 cards = [format_dnd_char(roll_dnd(), i+1) for i in range(count)]
-                yield event.plain_result("\n\n".join(cards))
+                yield "\n".join(cards)
                 return
 
             # ── .r / .rd 掷骰（严格匹配，无多余文本） ──

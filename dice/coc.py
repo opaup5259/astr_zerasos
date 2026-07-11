@@ -150,16 +150,12 @@ def roll_coc7th() -> dict:
 def format_coc_char(char: dict, index: int = 0) -> str:
     """格式化一张角色卡为 COC7th 面板格式"""
     attrs = char["attrs"]
-    lines = []
-    if index > 0:
-        lines.append(f"| -- 第 {index} 张 -- |")
     x5vals = {k: a["value"] * 5 for k, a in attrs.items()}
     total = sum(x5vals.values())
-    attr_line = "  ".join(f"{a['name']}:{x5vals[k]:>2}" for k, a in attrs.items())
-    lines.append(attr_line)
-    lines.append(f"HP: {char['hp']}  MP: {char['mp']}  MOV:{char['mov']}")
-    lines.append(f"幸运:{char['luck']}  DB: {char['damage_bonus']}  总值:{total}/{total + char['luck']}")
-    return "\n".join(lines)
+    attrs_str = "  ".join(f"{a['name']}:{x5vals[k]:>2}" for k, a in attrs.items())
+    status = f"HP:{char['hp']} MP:{char['mp']} MOV:{char['mov']} \u5e78\u8fd0:{char['luck']} DB:{char['damage_bonus']} \u603b\u503c:{total}/{total + char['luck']}"
+    prefix = f"| -- \u7b2c {index} \u5f20 -- |  " if index > 0 else ""
+    return f"{prefix}{attrs_str}  {status}"
 
 def roll_coc5th() -> dict:
     """

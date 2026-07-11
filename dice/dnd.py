@@ -47,18 +47,8 @@ def roll_dnd() -> dict:
 
 
 def format_dnd_char(char: dict, index: int = 0) -> str:
-    """格式化一张 DND 角色卡为文本"""
+    """格式化一张 DND 角色卡为面板格式"""
     attrs = char["attrs"]
-    lines = []
-    if index > 0:
-        lines.append(f"---- 第 {index} 张 ----")
-    
-    # 属性
     attr_items = "  ".join(f"{k}:{v:>2}" for k, v in attrs.items())
-    lines.append(attr_items)
-    
-    # 衍生
-    mods = "  ".join(f"{k[:2]}调:{char['con_mod']:+d}" for k in ["体质"])
-    lines.append(f"  HP:{char['hp']}  {mods}  熟练:{char['proficiency']}")
-    
-    return "\n".join(lines)
+    prefix = f"---- \u7b2c{index} \u5f20 ----  " if index > 0 else ""
+    return f"{prefix}{attr_items}  HP:{char['hp']}  体质调:{char['con_mod']:+d}  熟练:{char['proficiency']}"
