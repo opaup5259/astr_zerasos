@@ -201,10 +201,12 @@ class FanqieManager:
                 all_debug.append(line)
 
             # ── 推送 ──
-            # msg_chain = MessageChain().message(broadcast_msg)
             md_content = self._prepare_markdown_content(
                 self.data["chapter_states"][novel_id], novel_id, ai_comment
             )
+
+            if is_debug:
+                all_debug.append("\n\n---\n[Markdown Raw]---\n" + md_content)
 
             success_count = 0
             for target in self.data.get("target_groups", []):
