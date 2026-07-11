@@ -313,6 +313,7 @@ class ZerasosPlugin(Star):
 
                     body = {
                         "markdown": {"content": md_content},
+                        "keyboard": {"id": "102047593_1783759835"},
                         "msg_type": 2,
                         "msg_id": msg_id,
                         "msg_seq": random.randint(1, 10000),
