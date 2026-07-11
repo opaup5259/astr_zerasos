@@ -29,7 +29,8 @@ for _mod in list(sys.modules.keys()):
 from checkin import CheckinManager, set_interop_download_avatar
 from fanqie import FanqieManager
 from bqb import BqbManager
-from interop import init as interop_init
+from interop import init_primary as interop_init_primary
+from interop import init_secondary as interop_init_secondary
 from interop import (
     should_respond, mark_sent, is_admin,
     load_admin_ids, set_admin_ids, add_admin_id,
@@ -52,19 +53,28 @@ class ZerasosPlugin(Star):
         _bot_data_dir = str(StarTools.get_data_dir("zerasos_bot"))
         os.makedirs(_bot_data_dir, exist_ok=True)
 
+        # ── 平台角色 ──
+        self.platform_role = str(self.config.get("platform_role", "primary"))
+
         # ── Interop 互通模块 ──
-        # 第一个 Bot 实例调用后，_SHARED_DATA_DIR 即固定
-        # 后续其他 Bot 实例再调 init()，内部直接跳过
-        interop_init(_bot_data_dir)
+        # 主Bot（primary）固定共享目录为自己的 data_dir
+        # 从Bot（secondary）读取主Bot的共享目录，不覆盖
+        if self.platform_role == "primary":
+            interop_init_primary(_bot_data_dir)
+        else:
+            # 如果主Bot还没初始化（启动顺序问题），强制用自身路径
+            interop_init_secondary()
+            try:
+                _ = get_shared_data_dir()
+            except AssertionError:
+                # 主Bot未初始化，临时用自身路径
+                interop_init_primary(_bot_data_dir)
 
         # ⚠️ 所有子模块使用共享 data_dir，保证两 Bot 数据互通
         data_dir = get_shared_data_dir()
         os.makedirs(data_dir, exist_ok=True)
 
         self._init_admin_ids()
-
-        # 平台角色
-        self.platform_role = str(self.config.get("platform_role", "primary"))
         set_platform_role(self.platform_role)
         set_http_session_maker(lambda: None)
         try:

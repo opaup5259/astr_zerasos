@@ -67,22 +67,30 @@ def get_shared_data_dir() -> str:
     return _SHARED_DATA_DIR
 
 
-def init(data_dir: str):
+def init_primary(data_dir: str):
     """
-    初始化互通模块。
-    注意：第一个 Bot 实例调用后，_SHARED_DATA_DIR 即固定。
-    后续其他 Bot 实例再调用此函数时，仍使用第一个实例的路径。
-    这样保证了两个 Bot 实例共享同一份数据文件。
+    主 Bot（primary）初始化互通模块。
+    固定共享数据目录为自身的 data_dir，后续所有 Bot 实例均使用此路径。
     """
     global _STATE_FILE, _SHARED_DATA_DIR
-    if _SHARED_DATA_DIR is not None:
-        # 已初始化过，跳过（保持共享目录不变）
-        return
     _SHARED_DATA_DIR = data_dir
     os.makedirs(_SHARED_DATA_DIR, exist_ok=True)
     _STATE_FILE = os.path.join(_SHARED_DATA_DIR, "interop_state.json")
     _load_from_disk()
     set_avatar_cache_dir(_SHARED_DATA_DIR)
+
+
+def init_secondary():
+    """
+    从 Bot（secondary）初始化互通模块。
+    不覆盖共享目录，仅加载已有的共享状态。
+    """
+    global _STATE_FILE, _SHARED_DATA_DIR
+    if _SHARED_DATA_DIR is None:
+        # 主 Bot 还没初始化？先保留，稍后 main.py 中会被强制覆盖
+        return
+    _STATE_FILE = os.path.join(_SHARED_DATA_DIR, "interop_state.json")
+    _load_from_disk()
 
 
 # ============================================================

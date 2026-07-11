@@ -25,8 +25,8 @@
 	},
 	"platform_role": {
 		"type": "string",
-		"description": "互通平台角色 — 数据以第三方bot为主",
-		"hint": "primary = 第三方OneBot v11（数据主体、优先回复），secondary = QQ 官方 Bot（检测primary是否已发）。在QQ官方Bot配置页选 secondary，在OneBot v11配置页选 primary。",
+		"description": "互通角色 — 选择哪个Bot作为数据主源",
+		"hint": "⚠ 关键配置：每个Bot都需要设置\n\nprimary  = 数据主源（选三方 OneBot v11）\n  → 存储签到/表情包/番茄数据\n  → 优先回复\n\nsecondary = 从Bot（选QQ官方Bot）\n  → 回复前检测primary是否已发\n  → 如已发则跳过不回复\n\n💡 建议：在OneBot v11配置页选primary，在QQ官方Bot页选secondary",
 		"obvious_hint": true,
 		"default": "primary",
 		"options": ["primary", "secondary"]
