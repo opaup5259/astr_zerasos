@@ -174,7 +174,7 @@ class ZerasosPlugin(Star):
             # 优先用 AstrBot 原生方法去掉 @前缀，否则手动 strip
             # QQ Official 的 @格式: [At:qq_official] 绑定qq...
             clean = re.sub(r"^\[At:\S+\]\s*", "", text).strip()
-            match_bind = re.search(r"^(绑定qq|绑定QQ)\s*(\d{5,})\s*$", clean)
+            match_bind = re.match(r"^/?\s*(绑定qq|绑定QQ)\s*(\d{5,})\s*$", clean)
             if match_bind:
                 qq_number = match_bind.group(2)
                 ok = bind_user_id(platform_uid, qq_number)
