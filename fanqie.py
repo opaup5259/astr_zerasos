@@ -384,39 +384,36 @@ class FanqieManager:
 
     async def _try_send_markdown(self, target: str, md_content: str) -> bool:
         """尝试通过 QQ Official Bot API 发送原生 Markdown 消息"""
+        logging.info(f"[番茄] 准备向 {target[:24]} 推送 Markdown...")
 
-        # 修复 bot 拿不到导致静默失败的问题
         bot = getattr(self.plugin, "bot", None)
-
-        # 兼容处理：如果在后台任务中单单用 getattr 拿不到，尝试从 context.bots 中遍历寻找官方适配器实例
         if not bot and hasattr(self.plugin, "bots") and isinstance(self.plugin.bots, dict):
             for b in self.plugin.bots.values():
                 if hasattr(b, "api"):
                     bot = b
+                    logging.info(f"[番茄] 从备选 bots 找到 bot: {b}")
                     break
-
-        # 增加日志警告，以后如果再失败，看日志就知道卡在这里了
+        
         if not bot or not hasattr(bot, "api"):
-            logging.warning("[番茄] 无法获取 bot.api 实例，Markdown 降级为纯文本发送。")
+            logging.warning("[番茄] 无法获取 bot.api 实例，推送失败。")
             return False
 
-        # 从 UMO 中提取 group_openid
         group_openid = self._extract_group_openid(target)
         if not group_openid:
+            logging.warning(f"[番茄] 无法从目标 '{target}' 提取 group_openid，推送失败。")
             return False
 
+        logging.info(f"[番茄] 目标 group_openid: {group_openid}")
         try:
-            # 彻底抛弃 params 模板，像 coc 那样直接使用 content
             body = {
-                "markdown": {
-                    "content": md_content
-                },
+                "markdown": {"content": md_content},
                 "msg_type": 2,
             }
             await bot.api.post_group_message(group_openid=group_openid, **body)
+            logging.info(f"[番茄] Markdown 推送成功 -> {target[:24]}")
             return True
         except Exception as e:
-            logging.warning(f"[番茄] Markdown 推送失败 ({target[:24]}): {e}")
+            logging.error(f"[番茄] Markdown 推送异常 ({target[:24]}): {e}", exc_info=True)
             return False
 
     @staticmethod
