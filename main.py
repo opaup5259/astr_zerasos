@@ -171,7 +171,8 @@ class ZerasosPlugin(Star):
         # 绑定后该用户在两边签到数据共享
         # ════════════════════════════════════════════════════
         if role == "secondary" and event.is_at_or_wake_command and platform_uid:
-            match_bind = re.match(r"^(绑定qq|绑定QQ)\s*(\d{5,})\s*$", text.strip())
+            # text 包含 @bot 前缀，不能用 ^ 开头匹配
+            match_bind = re.search(r"(绑定qq|绑定QQ)\s*(\d{5,})\b", text)
             if match_bind:
                 qq_number = match_bind.group(2)
                 ok = bind_user_id(platform_uid, qq_number)
