@@ -339,6 +339,19 @@ def get_qq_from_openid(openid: str) -> Optional[str]:
     return None
 
 
+def normalize_uid(uid: str) -> str:
+    """
+    将任意平台的用户 ID 归一化为标准 QQ 号。
+    
+    如果 uid 是 openid 且已有映射到 QQ 号 → 返回 QQ 号
+    否则 → 返回原 uid（可能是 QQ 号或尚未映射的 openid）
+    
+    用于确保 checkin 等数据使用统一的 key 存储。
+    """
+    qq = get_qq_from_openid(uid)
+    return qq if qq else uid
+
+
 # ============================================================
 # 去重核心逻辑
 # ============================================================

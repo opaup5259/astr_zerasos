@@ -34,7 +34,7 @@ from interop import detect_role
 from interop import (
     should_respond, mark_sent, is_admin,
     load_admin_ids, set_admin_ids, add_admin_id,
-    record_user_ids, get_qq_from_openid,
+    record_user_ids, get_qq_from_openid, normalize_uid,
     has_cached_avatar, cache_avatar, download_avatar,
     set_http_session_maker,
     get_shared_data_dir,
@@ -67,7 +67,6 @@ class ZerasosPlugin(Star):
         # ── Checkin（共享 data_dir） ──
         enable_checkin = bool(self.config.get("enable_checkin", True))
         debug_mode = bool(self.config.get("debug_mode", False))
-        admin_qq = str(self.config.get("admin_qq", ""))
         bg_path = os.path.join(PLUGIN_DIR, "res", "bg.png")
         font_path = self._find_font()
 
@@ -75,7 +74,6 @@ class ZerasosPlugin(Star):
             data_dir=data_dir,
             bg_path=bg_path,
             font_path=font_path,
-            admin_qq=admin_qq,
             debug_mode=debug_mode,
             enable_checkin=enable_checkin,
         )
@@ -97,21 +95,13 @@ class ZerasosPlugin(Star):
 
     # ── 初始化管理员 ID 列表 ──
     def _init_admin_ids(self):
-        """
-        从 config 加载管理员 ID，支持多种格式：
-        - 新版：admin_ids (list)
-        - 旧版：admin_qq (str)
-        - 新旧同时存在时合并去重
-        """
+        """从配置 admin_ids 加载多平台管理员 ID"""
         existing = set(load_admin_ids())
         ids_list = self.config.get("admin_ids", [])
         if isinstance(ids_list, list):
             for uid in ids_list:
                 if uid and str(uid).strip():
                     existing.add(str(uid).strip())
-        admin_qq = str(self.config.get("admin_qq", "")).strip()
-        if admin_qq:
-            existing.add(admin_qq)
         if existing:
             set_admin_ids(sorted(existing))
 
@@ -144,7 +134,6 @@ class ZerasosPlugin(Star):
         self.cm.update_config(
             enable_checkin=bool(self.config.get("enable_checkin", True)),
             debug_mode=bool(self.config.get("debug_mode", False)),
-            admin_qq=str(self.config.get("admin_qq", "")),
         )
         self.fm.on_config_update(self.config)
         self.bqb.on_config_update(self.config)
@@ -264,7 +253,7 @@ class ZerasosPlugin(Star):
         if not self.cm.enable_checkin:
             yield event.plain_result("签到功能未开启。")
             return
-        uid = self.cm._uid(event)
+        uid = normalize_uid(self.cm._uid(event))
         if not uid:
             return
         nickname = self.cm._nickname(event)
@@ -350,7 +339,7 @@ class ZerasosPlugin(Star):
             if not self.cm.enable_checkin:
                 yield event.plain_result("签到功能未开启。")
                 return
-            uid = self.cm._uid(event)
+            uid = normalize_uid(self.cm._uid(event))
             if not uid:
                 return
             nickname = self.cm._nickname(event)

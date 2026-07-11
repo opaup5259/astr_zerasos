@@ -36,10 +36,9 @@ class CheckinManager:
     """签到核心逻辑：数据、卡片、排行、搜索、重置。"""
 
     def __init__(self, *, data_dir: str, bg_path: str, font_path: Optional[str],
-                 admin_qq: str, debug_mode: bool, enable_checkin: bool):
+                 debug_mode: bool, enable_checkin: bool):
         self.enable_checkin = enable_checkin
         self.debug_mode = debug_mode
-        self.admin_qq = admin_qq or ""
 
         self.data_dir = data_dir
         self.temp_dir = os.path.join(data_dir, "temp")
@@ -53,10 +52,9 @@ class CheckinManager:
         self._debug_buf: list[str] = []
 
     # ── 配置更新 ──────────────────────────────────
-    def update_config(self, *, enable_checkin: bool, debug_mode: bool, admin_qq: str):
+    def update_config(self, *, enable_checkin: bool, debug_mode: bool):
         self.enable_checkin = enable_checkin
         self.debug_mode = debug_mode
-        self.admin_qq = admin_qq or ""
         logging.info(f"[泽拉索斯] 热重载 签到:{'开' if enable_checkin else '关'} debug:{'开' if debug_mode else '关'}")
 
     # ── 调试 ──────────────────────────────────────
