@@ -360,20 +360,25 @@ class FanqieManager:
         return text
 
     def _prepare_markdown_content(self, chapter_state: dict, novel_id: str, ai_comment: str) -> str:
-        """构建原生的 Markdown Content 字符串"""
+        """构建 QQ Official Bot 的原生 Markdown Content 字符串"""
         novel_title = chapter_state.get("novel_title", "")
         chapter_title = chapter_state.get("chapter_title", "")
         novel_link = chapter_state.get("novel_link", f"{BASE_URL}/novel/{novel_id}")
         chapter_link = chapter_state.get("chapter_link", "")
         novel_abstract = chapter_state.get("novel_abstract", "")
+        novel_cover_url = chapter_state.get("novel_cover_url", "")
 
-        # 拼装类似 coc 角色卡的 Markdown 文本
+        # 替换模板占位符
         md_content = (
-            f"### 📚 《{novel_title}》 更新啦！\n"
-            f"**最新章节：** [{chapter_title}]({chapter_link})\n\n"
-            f"**🤖 AI吐槽：**\n> {ai_comment}\n\n"
-            f"**📖 小说简介：**\n{self.escape_md(novel_abstract[:100])}...\n\n"
-            f"🔗 [前往小说主页]({novel_link})"
+            f"### 📢 小说更新提醒\n"
+            f"![封面]({novel_cover_url})\n\n"
+            f"**书名**：[{novel_title}]({novel_link})\n"
+            f"**章节**：{chapter_title}\n\n"
+            f"------\n\n"
+            f"{self.escape_md(novel_abstract[:100])}...\n\n"
+            f"------\n\n"
+            f"> {ai_comment}\n\n"
+            f"[🔗 点击此处开始阅读]({chapter_link})"
         )
         return md_content
 
