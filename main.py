@@ -188,6 +188,10 @@ class ZerasosPlugin(Star):
         umo = getattr(event, 'unified_msg_origin', '')
         has_images = bool(self.bqb._extract_images(event))
 
+        # ── 缓存 bot 引用（供番茄后台任务发送 Markdown 使用）──
+        if not self.fm._bot and hasattr(event, 'bot') and event.bot:
+            self.fm._bot = event.bot
+
         # ── 自动检测本消息来自哪个平台 ──
         role = detect_role(umo)
 

@@ -37,6 +37,7 @@ class FanqieManager:
         self.lock = asyncio.Lock()
         self._load_data()
 
+        self._bot = None  # 从首次消息事件中缓存的 bot 实例
         self.task: Optional[asyncio.Task] = None
 
     # ── 配置解析 ──────────────────────────────────
@@ -391,12 +392,13 @@ class FanqieManager:
 
         _log(f"[番茄] 准备向 {target[:24]} 推送 Markdown...")
 
-        bot = getattr(self.plugin, "bot", None)
+        bot = self._bot
         if not bot and hasattr(self.plugin, "bots") and isinstance(self.plugin.bots, dict):
             for b in self.plugin.bots.values():
                 if hasattr(b, "api"):
                     bot = b
                     _log(f"[番茄] 从备选 bots 找到 bot: {b}")
+                    self._bot = bot  # 缓存
                     break
         
         if not bot or not hasattr(bot, "api"):
