@@ -550,17 +550,23 @@ class FanqieManager:
                     novel_cover_url = img["src"]
             else:
                 import re as _re
-                m = _re.search(r'<img[^>]*class="book-cover-img[^"]*"[^>]*src="([^"]+)"', html)
-                if m:
-                    novel_cover_url = m.group(1)
+                import html as _html  # 用于处理 &amp; 等实体字符
 
-        return {
-            "title": novel_title,
-            "abstract": novel_abstract,
-            "volume_name": volume_name,
-            "chapter_info": chapter_info,
-            "novel_cover_url": novel_cover_url,
-        }
+                # 使用正向先行断言 (?=...)，使得匹配不再受 class 和 src 先后顺序的限制
+                # [^"]*book-cover-img[^"]* 允许该 class 出现在字符串的任意位置
+                fallback_regex = r'<img(?=[^>]*class="[^"]*book-cover-img[^"]*")[^>]*src="([^"]+)"'
+                m = _re.search(fallback_regex, html)
+                if m:
+                    # 必须进行 unescape，把 &amp; 还原成 &
+                    novel_cover_url = _html.unescape(m.group(1))
+
+                return {
+                    "title": novel_title,
+                    "abstract": novel_abstract,
+                    "volume_name": volume_name,
+                    "chapter_info": chapter_info,
+                    "novel_cover_url": novel_cover_url,
+                }
 
     async def fetch_chapter_detail_async(self, url: str) -> dict:
         html = await self._http_get(url)
