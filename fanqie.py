@@ -362,6 +362,13 @@ class FanqieManager:
             text = text.replace(c, '\\' + c)
         return text
 
+    @staticmethod
+    def _dedup_garbled(text: str) -> str:
+        """去除番茄小说正文中连续重复的私用区乱码字符（如  → ）"""
+        if not text:
+            return text
+        return re.sub(r'([\ue000-\uf8ff])\1+', r'\1', text)
+
     def _prepare_markdown_content(self, chapter_state: dict, novel_id: str, ai_comment: str) -> str:
         """构建 QQ Official Bot 的原生 Markdown Content 字符串"""
         novel_title = chapter_state.get("novel_title", "")
@@ -497,6 +504,8 @@ class FanqieManager:
 
         novel_title = "未知小说"
         novel_abstract = ""
+        html = None
+        state = None
         first_item_id = last_ch.get("itemId", "")
         if chapters_by_vol:
             first_vol = chapters_by_vol[0]
@@ -542,7 +551,13 @@ class FanqieManager:
 
         # 提取封面图 URL
         novel_cover_url = ""
-        if html:
+        # 优先从 __INITIAL_STATE__ 中获取（page.thumbUri 或 reader.chapterData.thumbUri）
+        if state:
+            rd = state.get("reader", {})
+            cd = rd.get("chapterData", {}) if isinstance(rd, dict) else {}
+            novel_cover_url = cd.get("thumbUri", "") or state.get("page", {}).get("thumbUri", "")
+        # 回退到 HTML 标签解析
+        if not novel_cover_url and html:
             if HAS_BS4:
                 soup = BeautifulSoup(html, "html.parser")
                 img = soup.select_one("img.book-cover-img")
@@ -551,13 +566,9 @@ class FanqieManager:
             else:
                 import re as _re
                 import html as _html
-
-                # 使用正向先行断言 (?=...)，使得匹配不再受 class 和 src 先后顺序的限制
-                # [^"]*book-cover-img[^"]* 允许该 class 出现在字符串的任意位置
                 fallback_regex = r'<img(?=[^>]*class="[^"]*book-cover-img[^"]*")[^>]*src="([^"]+)"'
                 m = _re.search(fallback_regex, html)
                 if m:
-                    # 必须进行 unescape，把 &amp; 还原成 &
                     novel_cover_url = _html.unescape(m.group(1))
 
         return {
@@ -586,13 +597,13 @@ class FanqieManager:
             soup = BeautifulSoup(content_html, "html.parser")
             for p in soup.find_all("p"):
                 if text := p.get_text(strip=True):
-                    lines.append(text)
+                    lines.append(self._dedup_garbled(text))
         elif content_html:
             import re as _re
             for m in _re.finditer(r"<p[^>]*>(.*?)</p>", content_html, _re.DOTALL):
                 text = _re.sub(r"<[^>]+>", "", m.group(1)).strip()
                 if text:
-                    lines.append(text)
+                    lines.append(self._dedup_garbled(text))
 
         page_data = state.get("page", {}) if isinstance(state, dict) else {}
         update_time = page_data.get("lastPublishTime", "未知时间")
