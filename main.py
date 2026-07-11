@@ -171,8 +171,17 @@ class ZerasosPlugin(Star):
         # 绑定后该用户在两边签到数据共享
         # ════════════════════════════════════════════════════
         if role == "secondary" and event.is_at_or_wake_command and platform_uid:
-            # text 包含 @bot 前缀，不能用 ^ 开头匹配
-            match_bind = re.search(r"(绑定qq|绑定QQ)\s*(\d{5,})\b", text)
+            # 优先用 AstrBot 原生方法去掉 @前缀，否则手动 strip
+            clean = text
+            if hasattr(event, "get_plain_text"):
+                try:
+                    clean = event.get_plain_text().strip()
+                except Exception:
+                    pass
+            else:
+                # 兼容 @昵称 和 [At:xxx] 两种前缀格式
+                clean = re.sub(r"^(?:@\S+|\[At:\S+\])\s*", "", text).strip()
+            match_bind = re.search(r"^(绑定qq|绑定QQ)\s*(\d{5,})\s*$", clean)
             if match_bind:
                 qq_number = match_bind.group(2)
                 ok = bind_user_id(platform_uid, qq_number)
