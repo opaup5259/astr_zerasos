@@ -166,6 +166,17 @@ class ZerasosPlugin(Star):
         if text.strip():
             yield event.plain_result(text.strip())
 
+    # =================== Markdown 表格输出 ===================
+    @staticmethod
+    def _format_card_table(cards: list[str]) -> str:
+        """将多张角色卡格式化为 Markdown 表格"""
+        lines = ["| | 生成的属性 |"]
+        lines.append("| ---- | ------------------------------------------------------------ |")
+        for i, card in enumerate(cards, 1):
+            content = card.replace("\n", "<br />")
+            lines.append(f"| {i} | {content} |")
+        return "\n".join(lines)
+
     # =================== on_message（互通+签到+表情包） ===================
     @plugin_filter.event_message_type(EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):
@@ -264,7 +275,7 @@ class ZerasosPlugin(Star):
                 count = int(cm.group(1)) if cm.group(1) else 1
                 count = min(count, 10)
                 cards = [format_coc_char(roll_coc5th(), i+1) for i in range(count)]
-                yield event.plain_result("\n\n".join(cards))
+                yield event.plain_result(self._format_card_table(cards))
                 return
 
             cm = re.match(r"^coc(\d*)$", lower)
@@ -278,7 +289,7 @@ class ZerasosPlugin(Star):
                     count = int(num_str) if num_str else 1
                 count = min(count, 10)
                 cards = [format_coc_char(roll_coc7th(), i+1) for i in range(count)]
-                yield event.plain_result("\n\n".join(cards))
+                yield event.plain_result(self._format_card_table(cards))
                 return
 
             # ── .dnd / 。dnd / /dnd — DND 5e 角色卡（严格匹配） ──
@@ -287,7 +298,7 @@ class ZerasosPlugin(Star):
                 count = int(dm.group(1)) if dm.group(1) else 1
                 count = min(count, 10)
                 cards = [format_dnd_char(roll_dnd(), i+1) for i in range(count)]
-                yield event.plain_result("\n\n".join(cards))
+                yield event.plain_result(self._format_card_table(cards))
                 return
 
             # ── .r / .rd 掷骰（严格匹配，无多余文本） ──
