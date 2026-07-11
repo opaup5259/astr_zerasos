@@ -307,13 +307,37 @@ class ZerasosPlugin(Star):
                         f"| **2** | {lines[3]}<br/>{lines[4]}<br/>{lines[5]} |\n"
                         f"| **3** | {lines[6]}<br/>{lines[7]}<br/>{lines[8]} |"
                     )
-
+                    
+                    keyboard_content = {
+                        "rows": [
+                            {
+                                "buttons": [
+                                    {
+                                        "id": "btn1",
+                                        "render_data": {"label": "生成一次", "style": 1},
+                                        "action": {"type": 2, "permission": {"type": 2}, "data": ".coc", "enter": True}
+                                    },
+                                    {
+                                        "id": "btn2",
+                                        "render_data": {"label": "生成三次", "style": 1},
+                                        "action": {"type": 2, "permission": {"type": 2}, "data": ".coc3", "enter": True}
+                                    },
+                                    {
+                                        "id": "btn3",
+                                        "render_data": {"label": "生成五次", "style": 1},
+                                        "action": {"type": 2, "permission": {"type": 2}, "data": ".coc5", "enter": True}
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                    
                     raw = event.message_obj.raw_message
                     msg_id = event.message_obj.message_id
 
                     body = {
                         "markdown": {"content": md_content},
-                        "keyboard": {"id": "102047593_1783759835"},
+                        "keyboard": {"content": keyboard_content},
                         "msg_type": 2,
                         "msg_id": msg_id,
                         "msg_seq": random.randint(1, 10000),
