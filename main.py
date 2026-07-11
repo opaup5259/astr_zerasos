@@ -308,31 +308,6 @@ class ZerasosPlugin(Star):
                         params.append({"key": f"c{j+1}", "values": [line]})
                     params.append({"key": "username", "values": [username]})
 
-                    # 内联按钮（三个一排）
-                    keyboard = {
-                        "rows": [
-                            {
-                                "buttons": [
-                                    {
-                                        "id": "coc",
-                                        "render_data": {"label": "生成一次", "visited_label": "已生成", "style": 1},
-                                        "action": {"type": 2, "permission": {"type": 2}, "click_limit": 10, "data": "coc_reroll_1"},
-                                    },
-                                    {
-                                        "id": "coc3",
-                                        "render_data": {"label": "生成三次", "visited_label": "已生成", "style": 1},
-                                        "action": {"type": 2, "permission": {"type": 2}, "click_limit": 10, "data": "coc_reroll_3"},
-                                    },
-                                    {
-                                        "id": "coc5",
-                                        "render_data": {"label": "生成五次", "visited_label": "已生成", "style": 1},
-                                        "action": {"type": 2, "permission": {"type": 2}, "click_limit": 10, "data": "coc_reroll_5"},
-                                    },
-                                ]
-                            }
-                        ]
-                    }
-
                     raw = event.message_obj.raw_message
                     msg_id = event.message_obj.message_id
 
@@ -340,7 +315,6 @@ class ZerasosPlugin(Star):
                         await event.bot.api.post_group_message(
                             group_openid=raw.group_openid,
                             markdown={"custom_template_id": COC_TEMPLATE_ID, "params": params},
-                            keyboard=keyboard,
                             msg_type=2,
                             msg_id=msg_id,
                             msg_seq=random.randint(1, 10000),
@@ -349,7 +323,6 @@ class ZerasosPlugin(Star):
                         await event.post_c2c_message(
                             openid=raw.author.user_openid,
                             markdown={"custom_template_id": COC_TEMPLATE_ID, "params": params},
-                            keyboard=keyboard,
                             msg_type=2,
                             msg_id=msg_id,
                             msg_seq=random.randint(1, 10000),
