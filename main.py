@@ -161,9 +161,9 @@ class ZerasosPlugin(Star):
 
     # =================== 多行输出辅助（\n → <br /> 绕过AstrBot逗号过滤） ===================
     @staticmethod
-    def _br(event, text):
-        """yield plain_result，自动将 \n 替换为 <br />"""
-        yield event.plain_result(str(text).replace("\n", "<br />"))
+    def _br_text(text):
+        """将 \n 替换为 <br /> 绕过AstrBot逗号过滤"""
+        return str(text).replace("\n", "<br />")
 
     @staticmethod
     def _yield_lines(event, text: str):
@@ -390,7 +390,7 @@ class ZerasosPlugin(Star):
 
         if trigger_type is None:
             if self.cm.debug_mode and _is_admin:
-                yield from self._br(event, self.cm.debug_result())
+                yield event.plain_result(self._br_text(self.cm.debug_result()))
             async for r in _try_bqb_send():
                 yield r
             return
@@ -399,12 +399,12 @@ class ZerasosPlugin(Star):
             if self.cm.debug_mode:
                 self.cm._dlog("软触发被跳过: is_at_or_wake_command=True")
             if self.cm.debug_mode and _is_admin:
-                yield from self._br(event, self.cm.debug_result())
+                yield event.plain_result(self._br_text(self.cm.debug_result()))
             return
 
         if not uid:
             if self.cm.debug_mode and _is_admin:
-                yield from self._br(event, self.cm.debug_result())
+                yield event.plain_result(self._br_text(self.cm.debug_result()))
             return
 
         if self.cm.debug_mode:
@@ -445,7 +445,7 @@ class ZerasosPlugin(Star):
 
         # ── help ──
         if subcmd == "help":
-            yield from self._br(event, 
+            yield event.plain_result(self._br_text(
                 "═══════════════════════════════════════\n"
                 "         ✦ 泽拉索斯 · 使用指南 ✦\n"
                 "═══════════════════════════════════════\n"
@@ -487,7 +487,7 @@ class ZerasosPlugin(Star):
                 "═══════════════════════════════════════\n"
                 "💡 WebUI 配置签到/番茄/表情包参数\n"
                 "💡 互通角色：自动识别 OneBot v11=主 / QQ Official=从\n"
-            )
+            ))
             return
 
         # ── 管理员权限检查（支持多平台 ID） ──
@@ -576,10 +576,10 @@ class ZerasosPlugin(Star):
             elif fcmd == "list":
                 groups = self.fm.data.get("target_groups", [])
                 if not groups:
-                    yield from self._br(event, "推送列表为空。\n💡 在目标群发送 /zer fanqie add 即可绑定")
+                    yield event.plain_result(self._br_text("推送列表为空。\n💡 在目标群发送 /zer fanqie add 即可绑定"))
                 else:
                     res = "当前推送群聊:\n" + "\n".join(f"- {g}" for g in groups)
-                    yield from self._br(event, res)
+                    yield event.plain_result(self._br_text(res))
 
             elif fcmd == "reset":
                 self.fm.data["chapter_states"] = {}
@@ -588,10 +588,10 @@ class ZerasosPlugin(Star):
                 yield event.plain_result("✅ 已清除所有章节缓存，下次拉取必定播报")
 
             elif fcmd == "get_umo":
-                yield from self._br(event, 
+                yield event.plain_result(self._br_text(
                     f"✅ 当前底层标识 (UMO):\n{event.unified_msg_origin}\n\n"
                     f"💡 用 /zer fanqie add 绑定即可 100% 投递"
-                )
+                ))
 
             else:
                 yield event.plain_result("用法: /zer fanqie <force|add|del|list|reset|get_umo>")
@@ -600,14 +600,14 @@ class ZerasosPlugin(Star):
         # ── interop 互通管理 ──
         if subcmd == "interop":
             if len(parts) < 3:
-                yield from self._br(event, "用法:\n"
+                yield event.plain_result(self._br_text(
                     "  /zer interop status     互通状态\n"
                     "  /zer interop admin      管理员ID\n"
                     "  /zer interop admin add/del <ID>  添加/移除\n"
                     "  /zer interop bindings   查看用户绑定\n"
                     "  /zer interop bind <openid> <QQ>   强制绑定\n"
                     "  /zer interop unbind <openid>      解除绑定"
-                )
+                ))
                 return
 
             icmd = parts[2].lower()
@@ -631,10 +631,10 @@ class ZerasosPlugin(Star):
                     else:
                         yield event.plain_result("用法: /zer interop admin <add|del> <ID>")
                 else:
-                    yield from self._br(event, 
+                    yield event.plain_result(self._br_text(
                         f"管理员ID列表 ({len(admins)}人):\n"
                         + ("\n".join(f"- {x}" for x in admins) if admins else "未设置")
-                    )
+                    ))
 
             elif icmd == "bind":
                 # /zer interop bind <openid> <QQ号>
@@ -667,21 +667,26 @@ class ZerasosPlugin(Star):
                     lines = [f"用户绑定 ({len(bindings)} 条):"]
                     for oid, qq in bindings.items():
                         lines.append(f"  {oid[:24]}... → {qq}")
-                    yield from self._br(event, "\n".join(lines))
-
+                    yield event.plain_result(self._br_text("用法:\n"
+                        "/zer interop status     互通状态\n"
+                        "/zer interop admin      管理员ID\n"
+                        "/zer interop admin add/del <ID>  添加/移除\n"
+                        "/zer interop bindings   查看用户绑定\n"
+                        "/zer interop bind <openid> <QQ>   强制绑定\n"
+                        "/zer interop unbind <openid>      解除绑定"))
             elif icmd == "status":
                 from interop import _SHARED_STATE
                 pending = len(_SHARED_STATE.get("processing_locks", {}))
                 sent = len(_SHARED_STATE.get("sent_marks", {}))
                 admins = _SHARED_STATE.get("admin_ids", [])
                 bindings = _SHARED_STATE.get("user_bindings", {})
-                yield from self._br(event, 
+                yield event.plain_result(self._br_text(
                     f"🌐 互通状态\n"
                     f"处理中锁: {pending}\n"
                     f"已发送标记: {sent}\n"
                     f"管理员 ({len(admins)}人): {' '.join(admins) if admins else '未设置'}\n"
                     f"用户绑定 ({len(bindings)}条)"
-                )
+                ))
             return
 
         # ── bqb ──
@@ -698,7 +703,7 @@ class ZerasosPlugin(Star):
                 for item in items:
                     tags = ",".join(item.get("tags", []))
                     lines.append(f"[{item['id']}]|{tags}|{item.get('time','')}")
-                yield from self._br(event, "\n".join(lines))
+                yield event.plain_result(self._br_text("\n".join(lines)))
 
             elif bcmd == "remove":
                 if len(parts) < 4 or not parts[3].isdigit():
