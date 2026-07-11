@@ -210,7 +210,7 @@ class FanqieManager:
                         await self.context.send_message(umo, msg_chain)
                         sent = True
                         break
-                    except Exception:
+                    except Exception as e:
                         continue
                 if sent:
                     success_count += 1
