@@ -166,16 +166,14 @@ class ZerasosPlugin(Star):
         if text.strip():
             yield event.plain_result(text.strip())
 
-    # =================== Markdown 表格输出 ===================
+    # =================== 纯文本区块排版输出 ===================
     @staticmethod
     def _format_card_table(cards: list[str]) -> str:
-        """将多张角色卡格式化为 Markdown 表格"""
-        lines = ["| | 生成的属性 |"]
-        lines.append("| ---- | ------------------------------------------------------------ |")
+        """将多张角色卡格式化为纯文本区块"""
+        parts = ["\U0001f3b2 \u751f\u6210\u7684\u5c5e\u6027\u5982\u4e0b\uff1a"]
         for i, card in enumerate(cards, 1):
-            content = card.replace("\n", "<br />")
-            lines.append(f"| {i} | {content} |")
-        return "\n".join(lines)
+            parts.append(f"\u3010\u7b2c {i} \u5f20\u3011\n{card}")
+        return "\n\n".join(parts)
 
     # =================== on_message（互通+签到+表情包） ===================
     @plugin_filter.event_message_type(EventMessageType.ALL)
