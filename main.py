@@ -288,8 +288,6 @@ class ZerasosPlugin(Star):
 
                 username = event.get_sender_name()
 
-                COC_TEMPLATE_ID = "102047593_1783759782"
-
                 for batch_idx in range(batch_count):
                     cards = [format_coc_char(roll_coc7th()) for _ in range(3)]
 
@@ -301,45 +299,37 @@ class ZerasosPlugin(Star):
                     while len(lines) < 9:
                         lines.append(" ")
 
-                    params = []
-                    for j, line in enumerate(lines):
-                        params.append({"key": f"c{j+1}", "values": [line]})
-                    params.append({"key": "username", "values": [username]})
+                    md_content = (
+                        f"### 🎲 {username}的属性生成结果\n"
+                        f"| 序号 | 属性 |\n"
+                        f"| :--- | :--- |\n"
+                        f"| **1** | {lines[0]}<br/>{lines[1]}<br/>{lines[2]} |\n"
+                        f"| **2** | {lines[3]}<br/>{lines[4]}<br/>{lines[5]} |\n"
+                        f"| **3** | {lines[6]}<br/>{lines[7]}<br/>{lines[8]} |"
+                    )
 
                     raw = event.message_obj.raw_message
                     msg_id = event.message_obj.message_id
 
-                    # 只发必要字段，避免 content:null / keyboard:null 等被QQ拒绝
                     body = {
-                        "markdown": {
-                            "custom_template_id": COC_TEMPLATE_ID,
-                            "params": params,
-                        },
+                        "markdown": {"content": md_content},
+                        "msg_type": 2,
                         "msg_id": msg_id,
                         "msg_seq": random.randint(1, 10000),
                     }
 
                     if hasattr(raw, "group_openid") and raw.group_openid:
-                        from botpy.http import Route
-                        route = Route(
-                            "POST",
-                            "/v2/groups/{group_openid}/messages",
+                        await event.bot.api.post_group_message(
                             group_openid=raw.group_openid,
+                            **body,
                         )
-                        await event.bot.api._http.request(route, json=body)
                     elif hasattr(raw, "author") and hasattr(raw.author, "user_openid"):
-                        from botpy.http import Route
-                        route = Route(
-                            "POST",
-                            "/v2/users/{openid}/messages",
+                        await event.post_c2c_message(
                             openid=raw.author.user_openid,
+                            **body,
                         )
-                        await event.bot.api._http.request(route, json=body)
                     else:
-                        yield event.plain_result(
-                            f"🎲 {username}的属性生成结果\n"
-                            + "\n".join(f"卡{i//3+1}行{i%3+1}: {lines[i]}" for i in range(9))
-                        )
+                        yield event.plain_result(md_content)
 
                     if batch_idx < batch_count - 1:
                         import asyncio
