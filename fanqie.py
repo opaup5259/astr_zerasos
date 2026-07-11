@@ -147,6 +147,7 @@ class FanqieManager:
                     all_debug.append(f"[Debug] ID:{novel_id} 获取信息失败 (info={info is not None}, id={info.get('chapter_info', {}).get('id', 'N/A') if info else 'info is None'})")
                 else:
                     all_debug.append(f"[Debug] ID:{novel_id} 获取信息失败")
+                # 同时检查 Docker 日志: docker logs --tail 50 astrbot_wjfb-astrbot_wjFB-1 | grep 番茄爬虫
                 continue
 
             novel_title = info["title"]
@@ -492,11 +493,11 @@ class FanqieManager:
         try:
             dir_data = await self._http_get(dir_url, expect_json=True)
         except Exception as e:
-            all_debug.append(f"[Debug] _http_get 直接抛异常: {type(e).__name__}: {e}")
-            continue
+            logging.info(f"[番茄爬虫] _http_get 直接抛异常: {type(e).__name__}: {e}")
+            dir_data = None
         if not dir_data or not isinstance(dir_data, dict):
-            all_debug.append(f"[Debug] _http_get 返回无效: type={type(dir_data).__name__}, falsy={not dir_data}, is_dict={isinstance(dir_data, dict)}")
-            continue
+            logging.info(f"[番茄爬虫] fetch_novel_info 退出: dir_data={type(dir_data).__name__}, falsy={not dir_data}, is_dict={isinstance(dir_data, dict)}")
+            return None
 
         data = dir_data.get("data", {})
         vol_names = data.get("volumeNameList", ["默认卷"])
