@@ -57,12 +57,32 @@ def get_platform_role() -> str:
 # ============================================================
 # 初始化与持久化
 # ============================================================
+
+_SHARED_DATA_DIR: Optional[str] = None
+
+
+def get_shared_data_dir() -> str:
+    """获取共享数据目录（两个Bot实例共用的固定路径）"""
+    assert _SHARED_DATA_DIR is not None, "interop 未初始化，请先调用 init()"
+    return _SHARED_DATA_DIR
+
+
 def init(data_dir: str):
-    """初始化互通模块，加载持久化状态"""
-    global _STATE_FILE
-    _STATE_FILE = os.path.join(data_dir, "interop_state.json")
+    """
+    初始化互通模块。
+    注意：第一个 Bot 实例调用后，_SHARED_DATA_DIR 即固定。
+    后续其他 Bot 实例再调用此函数时，仍使用第一个实例的路径。
+    这样保证了两个 Bot 实例共享同一份数据文件。
+    """
+    global _STATE_FILE, _SHARED_DATA_DIR
+    if _SHARED_DATA_DIR is not None:
+        # 已初始化过，跳过（保持共享目录不变）
+        return
+    _SHARED_DATA_DIR = data_dir
+    os.makedirs(_SHARED_DATA_DIR, exist_ok=True)
+    _STATE_FILE = os.path.join(_SHARED_DATA_DIR, "interop_state.json")
     _load_from_disk()
-    set_avatar_cache_dir(data_dir)
+    set_avatar_cache_dir(_SHARED_DATA_DIR)
 
 
 # ============================================================

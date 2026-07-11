@@ -1,6 +1,6 @@
 # 泽拉索斯 (Zerasos) — AstrBot 多功能插件
 
-集**每日签到** + **番茄小说更新监控**于一体的 AstrBot 插件。
+集**每日签到** + **双Bot互通** + **番茄小说更新监控** + **表情包**于一体的 AstrBot 插件。
 
 ## ✨ 功能
 
@@ -9,7 +9,7 @@
 |------|------|
 | **自动偷取** | 看到好图→AI 视觉打标签→自动保存到表情包库 |
 | **概率发送** | 日常闲聊时根据情绪/场景标签匹配，随机发送 |
-| **手动管理** | `/zra bqb list/add/remove/get` 管理表情包库 |
+| **手动管理** | `/zer bqb list/add/remove/get` 管理表情包库 |
 | **独立开关** | 偷取和发送功能可分别启停 |
 
 ### 📅 每日签到
@@ -53,28 +53,37 @@ apt install fonts-noto-cjk
 | 指令 | 说明 |
 |------|------|
 | `/签到` `/打卡` | 手动签到（硬触发） |
-| `/checkin` | 签到快捷指令（等价于 `/zra checkin`） |
+| `/checkin` | 签到快捷指令（等价于 `/zer checkin`） |
 | `早安` `安安` `晚安` `早` `安` | 软触发签到 |
 
 ### 管理指令（需 WebUI 配置 admin_qq）
 
 | 指令 | 说明 |
 |------|------|
-| `/zra help` | 查看帮助 |
-| `/zra checkin` | 手动签到 |
-| `/zra list [页数]` | 签到排行榜 |
-| `/zra search <QQ号>` | 查询指定用户签到详情 |
-| `/zra reset confirm force` | 重置所有签到数据 |
-| `/zra bqb list [页]` | 查看表情包列表 |
-| `/zra bqb get <id>` | 获取指定表情包 |
-| `/zra bqb remove <id>` | 删除表情包 |
-| `/zra bqb add` + 图片 | 手动添加表情包 |
-| `/zra fanqie force` | 强制检查番茄小说更新并播报 |
-| `/zra fanqie add` | 在目标群发送，绑定推送 |
-| `/zra fanqie del` | 移出推送列表 |
-| `/zra fanqie list` | 查看已绑定群聊 |
-| `/zra fanqie reset` | 清空章节缓存 |
-| `/zra fanqie get_umo` | 获取当前群底层标识 |
+| `/zer help` | 查看帮助 |
+| `/zer checkin` | 手动签到 |
+| `/zer list [页数]` | 签到排行榜 |
+| `/zer search <QQ号>` | 查询指定用户签到详情 |
+| `/zer reset confirm force` | 重置所有签到数据 |
+| `/zer bqb list [页]` | 查看表情包列表 |
+| `/zer bqb get <id>` | 获取指定表情包 |
+| `/zer bqb remove <id>` | 删除表情包 |
+| `/zer bqb add` + 图片 | 手动添加表情包 |
+| `/zer fanqie force` | 强制检查番茄小说更新并播报 |
+| `/zer fanqie add` | 在目标群发送，绑定推送 |
+| `/zer fanqie del` | 移出推送列表 |
+| `/zer fanqie list` | 查看已绑定群聊 |
+| `/zer fanqie reset` | 清空章节缓存 |
+| `/zer fanqie get_umo` | 获取当前群底层标识 |
+
+### 互通管理指令（需 WebUI 配置 admin_ids）
+
+| 指令 | 说明 |
+|------|------|
+| `/zer interop status` | 查看互通去重状态 |
+| `/zer interop admin` | 查看管理员 ID 列表 |
+| `/zer interop admin add <ID>` | 添加管理员 ID |
+| `/zer interop admin del <ID>` | 移除管理员 ID |
 
 ## ⚙️ WebUI 配置
 

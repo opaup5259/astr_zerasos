@@ -36,6 +36,7 @@ from interop import (
     record_user_ids, get_qq_from_openid,
     has_cached_avatar, cache_avatar, download_avatar,
     set_platform_role, set_http_session_maker,
+    get_shared_data_dir,
 )
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -47,19 +48,25 @@ class ZerasosPlugin(Star):
         super().__init__(context)
         self.config = config or {}
 
-        # ── data_dir ──
-        data_dir = str(StarTools.get_data_dir("zerasos_bot"))
+        # ── data_dir（先用自己的初始化 interop，再改成共享路径） ──
+        _bot_data_dir = str(StarTools.get_data_dir("zerasos_bot"))
+        os.makedirs(_bot_data_dir, exist_ok=True)
+
+        # ── Interop 互通模块 ──
+        # 第一个 Bot 实例调用后，_SHARED_DATA_DIR 即固定
+        # 后续其他 Bot 实例再调 init()，内部直接跳过
+        interop_init(_bot_data_dir)
+
+        # ⚠️ 所有子模块使用共享 data_dir，保证两 Bot 数据互通
+        data_dir = get_shared_data_dir()
         os.makedirs(data_dir, exist_ok=True)
 
-        # ── Interop 互通模块（全局初始化一次即可） ──
-        interop_init(data_dir)
         self._init_admin_ids()
 
-        # 平台角色：primary（QQ 官方 Bot）/ secondary（OneBot v11）
+        # 平台角色
         self.platform_role = str(self.config.get("platform_role", "primary"))
         set_platform_role(self.platform_role)
-        set_http_session_maker(lambda: None)  # 由 download_avatar 内部自行创建 session
-        # 注入头像代理到 checkin 模块
+        set_http_session_maker(lambda: None)
         try:
             from interop import download_avatar as _ia
             set_interop_download_avatar(_ia)
@@ -67,7 +74,7 @@ class ZerasosPlugin(Star):
             logger.warning(f"[泽拉索斯] 头像代理注入失败: {e}")
         logger.info(f"[泽拉索斯] 互通模式: platform_role={self.platform_role}")
 
-        # ── Checkin ──
+        # ── Checkin（共享 data_dir） ──
         enable_checkin = bool(self.config.get("enable_checkin", True))
         debug_mode = bool(self.config.get("debug_mode", False))
         admin_qq = str(self.config.get("admin_qq", ""))
@@ -83,7 +90,7 @@ class ZerasosPlugin(Star):
             enable_checkin=enable_checkin,
         )
 
-        # ── Fanqie ──
+        # ── Fanqie（共享 data_dir） ──
         self.fm = FanqieManager(
             data_dir=data_dir,
             config=self.config,
@@ -91,7 +98,7 @@ class ZerasosPlugin(Star):
         )
         self.fm.start_background_loop()
 
-        # ── BQB ──
+        # ── BQB（共享 data_dir） ──
         self.bqb = BqbManager(
             data_dir=data_dir,
             config=self.config,
@@ -338,6 +345,17 @@ class ZerasosPlugin(Star):
 
         # ── checkin / 签到 ──
         if subcmd == "checkin":
+            # 子子指令检查：/zer checkin reset confirm force
+            if len(parts) >= 3:
+                sub2 = parts[2].lower()
+                if sub2 == "reset":
+                    if len(parts) >= 6 and parts[3] == "confirm" and parts[4] == "force":
+                        await self.cm.reset_all()
+                        yield event.plain_result("已重置所有签到数据和缓存图片。")
+                    else:
+                        yield event.plain_result("用法: /zer checkin reset confirm force")
+                    return
+            # 普通签到
             if not self.cm.enable_checkin:
                 yield event.plain_result("签到功能未开启。")
                 return
