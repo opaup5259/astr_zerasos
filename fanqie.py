@@ -367,7 +367,23 @@ class FanqieManager:
         """去除番茄小说正文中连续重复的私用区乱码字符（如  → ）"""
         if not text:
             return text
-        return re.sub(r'([\ue000-\uf8ff])\1+', r'\1', text)
+        result = re.sub(r'([\ue000-\uf8ff])\1+', r'\1', text)
+        if result != text:
+            logging.info(f"[番茄乱码去重] 去除了 {len(text)-len(result)} 个重复 PUA 字符")
+        return result
+
+    _BRAILLE_RANGE = 0x28FF - 0x2800 + 1  # 256 Braille patterns
+
+    @staticmethod
+    def _obfuscate_pua(text: str) -> str:
+        """将番茄防爬混淆的私用区字符（U+E000~U+F8FF）替换为可见盲文符号"""
+        if not text:
+            return text
+        def _replacer(m):
+            ch = ord(m.group(0))
+            # 确定性映射：同个 PUA 字符 → 同个盲文符号
+            return chr(0x2800 + (ch - 0xE000) % FanqieManager._BRAILLE_RANGE)
+        return re.sub(r'[\ue000-\uf8ff]', _replacer, text)
 
     def _prepare_markdown_content(self, chapter_state: dict, novel_id: str, ai_comment: str) -> str:
         """构建 QQ Official Bot 的原生 Markdown Content 字符串"""
@@ -601,13 +617,13 @@ class FanqieManager:
             soup = BeautifulSoup(content_html, "html.parser")
             for p in soup.find_all("p"):
                 if text := p.get_text(strip=True):
-                    lines.append(self._dedup_garbled(text))
+                    lines.append(self._obfuscate_pua(text))
         elif content_html:
             import re as _re
             for m in _re.finditer(r"<p[^>]*>(.*?)</p>", content_html, _re.DOTALL):
                 text = _re.sub(r"<[^>]+>", "", m.group(1)).strip()
                 if text:
-                    lines.append(self._dedup_garbled(text))
+                    lines.append(self._obfuscate_pua(text))
 
         page_data = state.get("page", {}) if isinstance(state, dict) else {}
         update_time = page_data.get("lastPublishTime", "未知时间")
