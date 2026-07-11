@@ -1,6 +1,20 @@
 # 更新日志
 
-## 2.0109 (2026-07-11)
+## 2.0201 (2026-07-12)
+### 新增
+- 番茄小说正文 PUA 防爬混淆字符（U+E000~U+F8FF）替换为可见盲文符号（⢭⠣⡗⢗ 等），PC/手机均可阅读
+- 封面图通过 `__INITIAL_STATE__` 的 `thumbUri` 自动获取，不再依赖 HTML img 标签
+
+### 变更
+- Markdown 推送完全重写：废弃 `custom_template_id` + `params` 模板，改用原生 `content` 模式
+- 后台任务 bot 实例获取：改为首次消息 event 缓存 + `context.bots` 遍历 fallback
+- UMO 识别通用化：`_extract_group_openid` 用正则匹配任意 `*GroupMessage:hex` 格式
+
+### 修复
+- 修复 `fetch_novel_info` 在 `HAS_BS4=True` 时缺少 `return` 导致静默返回 `None`
+- 修复 AI 评论空行导致 Markdown 引用渲染断裂，现压缩空行并每段加 `> ` 前缀
+- 修复封面图 URL 不存在导致 `![封面]()` 空链接
+- 修复 `aiohttp.ClientSession` timeout 参数废弃警告
 ### 变更
 - `.coc` 指令重写：改为分批发送（`.coc`=3张/`.coc3`=9张/`.coc5`=15张），每批间隔1秒
 - 移除 `.coc5x`（COC5th）指令
