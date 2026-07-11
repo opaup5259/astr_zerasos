@@ -312,12 +312,23 @@ class ZerasosPlugin(Star):
                     msg_id = event.message_obj.message_id
 
                     if hasattr(raw, "group_openid") and raw.group_openid:
-                        await event.bot.api.post_group_message(
+                        from botpy.http import Route
+                        route = Route(
+                            "POST",
+                            "/v2/groups/{group_openid}/messages",
                             group_openid=raw.group_openid,
-                            markdown={"custom_template_id": COC_TEMPLATE_ID, "params": params},
-                            msg_type=2,
-                            msg_id=msg_id,
-                            msg_seq=random.randint(1, 10000),
+                        )
+                        await event.bot.api._http.request(
+                            route,
+                            json={
+                                "markdown": {
+                                    "custom_template_id": COC_TEMPLATE_ID,
+                                    "params": params,
+                                },
+                                "msg_type": 2,
+                                "msg_id": msg_id,
+                                "msg_seq": random.randint(1, 10000),
+                            },
                         )
                     elif hasattr(raw, "author") and hasattr(raw.author, "user_openid"):
                         await event.post_c2c_message(
