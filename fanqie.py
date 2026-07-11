@@ -20,6 +20,7 @@ except ImportError:
 
 
 BASE_URL = "https://fanqienovel.com"
+MARKDOWN_TEMPLATE_ID = "102047593_1783778565"
 
 
 class FanqieManager:
@@ -145,6 +146,7 @@ class FanqieManager:
             volume_name = info["volume_name"]
             chapter_info = info["chapter_info"]
             novel_abstract = info["abstract"]
+            novel_cover_url = info.get("novel_cover_url", "")
 
             local_state = self.data["chapter_states"].get(novel_id, {})
             local_chapter_id = local_state.get("chapter_id", "")
@@ -166,6 +168,10 @@ class FanqieManager:
                 "chapter_id": chapter_info["id"],
                 "last_update_time": result["update_time"],
                 "content": result["content"],
+                "novel_cover_url": novel_cover_url,
+                "novel_abstract": novel_abstract,
+                "chapter_link": chapter_info["full_url"],
+                "novel_link": f"{BASE_URL}/novel/{novel_id}",
             }
 
             if novel_id not in self.data["chapter_history"]:
@@ -177,6 +183,7 @@ class FanqieManager:
                 "update_time": result["update_time"],
                 "volume_name": volume_name,
                 "novel_abstract": novel_abstract,
+                "novel_cover_url": novel_cover_url,
             })
             if len(self.data["chapter_history"][novel_id]) > 20:
                 self.data["chapter_history"][novel_id] = self.data["chapter_history"][novel_id][-20:]
@@ -184,7 +191,7 @@ class FanqieManager:
 
             chapter_history = self.data["chapter_history"].get(novel_id, [])[:-1]
             custom_summary = self.novel_summaries.get(novel_id, "")
-            broadcast_msg, ai_debug_lines = await self.generate_broadcast(
+            broadcast_msg, ai_debug_lines, ai_comment = await self.generate_broadcast(
                 novel_title, volume_name, chapter_info,
                 result["update_time"], result["content"],
                 result.get("chapter_title", ""), result.get("word_count", ""),
@@ -195,23 +202,34 @@ class FanqieManager:
 
             # ── 推送 ──
             msg_chain = MessageChain().message(broadcast_msg)
+            md_params = self._prepare_markdown_params(
+                self.data["chapter_states"][novel_id], novel_id, ai_comment
+            )
+
             success_count = 0
             for target in self.data.get("target_groups", []):
                 sent = False
-                possible = [target]
-                if target.isdigit():
-                    possible.extend([
-                        f"default:GroupMessage:{target}",
-                        f"aiocqhttp-group-{target}",
-                        f"group_{target}", f"group-{target}", f"qq_group_{target}",
-                    ])
-                for umo in possible:
-                    try:
-                        await self.context.send_message(umo, msg_chain)
-                        sent = True
-                        break
-                    except Exception:
-                        continue
+
+                # 尝试 Markdown 模板推送（仅 QQ Official 生效）
+                if not sent:
+                    sent = await self._try_send_markdown(target, md_params)
+
+                # 回退纯文本
+                if not sent:
+                    possible = [target]
+                    if target.isdigit():
+                        possible.extend([
+                            f"default:GroupMessage:{target}",
+                            f"aiocqhttp-group-{target}",
+                            f"group_{target}", f"group-{target}", f"qq_group_{target}",
+                        ])
+                    for umo in possible:
+                        try:
+                            await self.context.send_message(umo, msg_chain)
+                            sent = True
+                            break
+                        except Exception:
+                            continue
                 if sent:
                     success_count += 1
 
@@ -325,11 +343,11 @@ class FanqieManager:
                 ct = getattr(res, "completion_text", None)
                 if ct:
                     debug.append(f"[AI-DEBUG] AI 回复长度={len(ct)}")
-                    return (f"{preset_prefix}\n━━━━━━━━━━━━━━\n{ct}", debug)
+                    return (f"{preset_prefix}\n━━━━━━━━━━━━━━\n{ct}", debug, ct or "")
         except Exception as e:
             debug.append(f"[AI-DEBUG] AI 异常: {e}")
 
-        return (f"{preset_prefix}\n━━━━━━━━━━━━━━\n（AI生成失败）", debug)
+        return (f"{preset_prefix}\n━━━━━━━━━━━━━━\n（AI生成失败）", debug, "")
 
     # ── HTML 解析 ─────────────────────────────────
     # ── HTTP 请求（通用） ──────────────────────────
@@ -350,6 +368,77 @@ class FanqieManager:
             except Exception as e:
                 logging.error(f"[爬虫] 请求失败 {url}: {e}")
                 return {} if expect_json else None
+
+    # ── Markdown 模板工具 ────────────────────────────
+    @staticmethod
+    def escape_md(text: str) -> str:
+        """转义 Markdown 特殊字符"""
+        if not text:
+            return ""
+        text = str(text)
+        for c in r'\`*_{}[]()#+-.!|~':
+            text = text.replace(c, '\\' + c)
+        return text
+
+    def _prepare_markdown_params(self, chapter_state: dict, novel_id: str, ai_comment: str) -> list[dict]:
+        """构建 Markdown 模板的 params 参数"""
+        return [
+            {"key": "urlfm", "values": [chapter_state.get("novel_cover_url", "")]},
+            {"key": "name", "values": [chapter_state.get("novel_title", "")]},
+            {"key": "url1", "values": [chapter_state.get("novel_link", f"{BASE_URL}/novel/{novel_id}")]},
+            {"key": "name2", "values": [chapter_state.get("chapter_title", "")]},
+            {"key": "content1", "values": [self.escape_md(chapter_state.get("novel_abstract", ""))]},
+            {"key": "content2", "values": [self.escape_md(ai_comment)]},
+            {"key": "url2", "values": [chapter_state.get("chapter_link", "")]},
+        ]
+
+    async def _try_send_markdown(self, target: str, params: list[dict]) -> bool:
+        """尝试通过 QQ Official Bot API 发送 Markdown 模板消息"""
+        # 从 context 中获取 bot 引用
+        bot = getattr(self.context, "bot", None)
+        if not bot or not hasattr(bot, "api"):
+            return False
+
+        # 从 UMO 中提取 group_openid
+        group_openid = self._extract_group_openid(target)
+        if not group_openid:
+            return False
+
+        try:
+            body = {
+                "markdown": {
+                    "custom_template_id": MARKDOWN_TEMPLATE_ID,
+                    "params": params,
+                },
+                "msg_type": 2,
+            }
+            await bot.api.post_group_message(group_openid=group_openid, **body)
+            return True
+        except Exception as e:
+            logging.warning(f"[番茄] Markdown 模板推送失败 ({target[:24]}): {e}")
+            return False
+
+    @staticmethod
+    def _extract_group_openid(target: str) -> Optional[str]:
+        """从 UMO 字符串中提取 QQ Official 的 group_openid"""
+        if not target:
+            return None
+        # qqofficial:group:<group_openid>
+        if "qqofficial:group:" in target:
+            idx = target.index("qqofficial:group:") + len("qqofficial:group:")
+            end = target.find(":", idx)
+            return target[idx:end] if end > idx else target[idx:]
+        # qqofficial:group_<group_openid>
+        if "qqofficial:group_" in target:
+            idx = target.index("qqofficial:group_") + len("qqofficial:group_")
+            end = target.find(":", idx)
+            return target[idx:end] if end > idx else target[idx:]
+        # default:GroupMessage:<group_openid>
+        if target.startswith("default:GroupMessage:"):
+            uid = target[len("default:GroupMessage:"):]
+            if uid and not uid.isdigit():
+                return uid.split(":")[0]
+        return None
 
     @staticmethod
     def _extract_initial_state(html: str) -> Optional[dict]:
@@ -431,11 +520,26 @@ class FanqieManager:
                     if m_match:
                         novel_abstract = m_match.group(1)[:300]
 
+        # 提取封面图 URL
+        novel_cover_url = ""
+        if html:
+            if HAS_BS4:
+                soup = BeautifulSoup(html, "html.parser")
+                img = soup.select_one("img.book-cover-img")
+                if img and img.get("src"):
+                    novel_cover_url = img["src"]
+            else:
+                import re as _re
+                m = _re.search(r'<img[^>]*class="book-cover-img[^"]*"[^>]*src="([^"]+)"', html)
+                if m:
+                    novel_cover_url = m.group(1)
+
         return {
             "title": novel_title,
             "abstract": novel_abstract,
             "volume_name": volume_name,
             "chapter_info": chapter_info,
+            "novel_cover_url": novel_cover_url,
         }
 
     async def fetch_chapter_detail_async(self, url: str) -> dict:
