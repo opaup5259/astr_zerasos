@@ -1,4 +1,4 @@
-import os, sys, re, logging, importlib
+import os, sys, re, random, logging, importlib
 from typing import Optional
 
 # 禁止 Python 写入 .pyc，从源头杜绝字节码缓存问题
@@ -307,14 +307,37 @@ class ZerasosPlugin(Star):
                         params.append({"key": f"c{j+1}", "values": [line]})
                     params.append({"key": "username", "values": [event.get_sender_name()]})
 
-                    payload = {
-                        "markdown": {
-                            "custom_template_id": COC_TEMPLATE_ID,
-                            "params": params
-                        },
-                        "keyboard": {"id": COC_KEYBOARD_ID}
+                    md_payload = {
+                        "custom_template_id": COC_TEMPLATE_ID,
+                        "params": params,
                     }
-                    await event.bot.send_message(event.target, payload)
+                    kb_payload = {"id": COC_KEYBOARD_ID}
+
+                    raw = event.message_obj.raw_message
+                    msg_id = event.message_obj.message_id
+
+                    if hasattr(raw, "group_openid") and raw.group_openid:
+                        await event.bot.api.post_group_message(
+                            group_openid=raw.group_openid,
+                            markdown=md_payload,
+                            keyboard=kb_payload,
+                            msg_id=msg_id,
+                            msg_seq=random.randint(1, 10000),
+                        )
+                    elif hasattr(raw, "author") and hasattr(raw.author, "user_openid"):
+                        await event.post_c2c_message(
+                            openid=raw.author.user_openid,
+                            markdown=md_payload,
+                            keyboard=kb_payload,
+                            msg_id=msg_id,
+                            msg_seq=random.randint(1, 10000),
+                        )
+                    else:
+                        # 非QQOfficial平台降级为纯文本
+                        yield event.plain_result(
+                            f"🎲 {event.get_sender_name()}的属性生成结果\n"
+                            + "\n".join(f"卡{i//3+1}行{i%3+1}: {lines[i]}" for i in range(9))
+                        )
 
                     if batch_idx < batch_count - 1:
                         import asyncio
