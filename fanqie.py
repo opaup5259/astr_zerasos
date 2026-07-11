@@ -427,24 +427,35 @@ class FanqieManager:
 
     @staticmethod
     def _extract_group_openid(target: str) -> Optional[str]:
-        """从 UMO 字符串中提取 QQ Official 的 group_openid"""
+        """从 UMO 字符串中提取 QQ Official 的 group_openid
+        
+        兼容格式：
+          - zerasos:GroupMessage:<openid>
+          - qqofficial:GroupMessage:<openid>
+          - default:GroupMessage:<openid>
+          - qqofficial:group:<openid>
+          - qqofficial:group_<openid>
+        """
         if not target:
             return None
+
+        # 通用：匹配 *GroupMessage:<hex_openid> 格式（兼容 zerasos/qqofficial/default 等任意前缀）
+        gm_match = re.search(r'GroupMessage:([A-F0-9]+)', target)
+        if gm_match:
+            return gm_match.group(1)
+
         # qqofficial:group:<group_openid>
         if "qqofficial:group:" in target:
             idx = target.index("qqofficial:group:") + len("qqofficial:group:")
             end = target.find(":", idx)
             return target[idx:end] if end > idx else target[idx:]
+
         # qqofficial:group_<group_openid>
         if "qqofficial:group_" in target:
             idx = target.index("qqofficial:group_") + len("qqofficial:group_")
             end = target.find(":", idx)
             return target[idx:end] if end > idx else target[idx:]
-        # default:GroupMessage:<group_openid>
-        if target.startswith("default:GroupMessage:"):
-            uid = target[len("default:GroupMessage:"):]
-            if uid and not uid.isdigit():
-                return uid.split(":")[0]
+
         return None
 
     @staticmethod
