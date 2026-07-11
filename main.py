@@ -159,13 +159,12 @@ class ZerasosPlugin(Star):
     async def terminate(self):
         await self.fm.terminate()
 
-    # =================== 多行输出辅助（平台不支持 \n，逐行yield） ===================
+    # =================== 多行输出辅助（整段文本 yield，保留 \n） ===================
     @staticmethod
     def _yield_lines(event, text: str):
-        """将多行文本逐行 yield 为独立消息"""
-        for line in text.split("\n"):
-            if line.strip():
-                yield event.plain_result(line.strip())
+        """将多行文本整段 yield，保留 \n 换行"""
+        if text.strip():
+            yield event.plain_result(text.strip())
 
     # =================== on_message（互通+签到+表情包） ===================
     @plugin_filter.event_message_type(EventMessageType.ALL)
