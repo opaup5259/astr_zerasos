@@ -1,5 +1,17 @@
 # 更新日志
 
+## 2.0109 (2026-07-11)
+### 变更
+- `.coc` 指令重写：改为分批发送（`.coc`=3张/`.coc3`=9张/`.coc5`=15张），每批间隔1秒
+- 移除 `.coc5x`（COC5th）指令
+- `.coc` 发送改用 QQ 官方 Bot Markdown 模板（custom_template_id + params），不再拼凑原生 Markdown
+- 新增内联按钮（生成一次/生成三次/生成五次），使用 `keyboard.content` + `enter` 模式，点击直接发送指令
+- 版本号 2.0108 → 2.0109
+
+### 修复
+- 修复 `markdown消息参数错误`：改用 `post_group_message` + `**body` 方式发送，避免 `_http.request` 遗漏 `msg_type`
+- 修复 `false` 未定义错误
+
 ## 2.0108 (2026-07-11)
 ### 修复
 - 修复 coc.py 第162行 `return` 与 `def roll_coc5th()` 挤行导致的语法错误（插件加载失败）
