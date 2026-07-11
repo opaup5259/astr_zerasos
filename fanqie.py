@@ -25,9 +25,10 @@ BASE_URL = "https://fanqienovel.com"
 class FanqieManager:
     """番茄小说更新监控，由 ZerasosPlugin 创建并持有。"""
 
-    def __init__(self, *, data_dir: str, config: dict, context):
+    def __init__(self, *, data_dir: str, config: dict, context, plugin):
         self.config = config or {}
         self.context = context
+        self.plugin = plugin
         self.data_dir = data_dir
         self._parse_config()
 
@@ -380,11 +381,11 @@ class FanqieManager:
         """尝试通过 QQ Official Bot API 发送原生 Markdown 消息"""
 
         # 修复 bot 拿不到导致静默失败的问题
-        bot = getattr(self.context, "bot", None)
+        bot = getattr(self.plugin, "bot", None)
 
         # 兼容处理：如果在后台任务中单单用 getattr 拿不到，尝试从 context.bots 中遍历寻找官方适配器实例
-        if not bot and hasattr(self.context, "bots") and isinstance(self.context.bots, dict):
-            for b in self.context.bots.values():
+        if not bot and hasattr(self.plugin, "bots") and isinstance(self.plugin.bots, dict):
+            for b in self.plugin.bots.values():
                 if hasattr(b, "api"):
                     bot = b
                     break
