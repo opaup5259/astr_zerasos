@@ -272,7 +272,7 @@ class ZerasosPlugin(Star):
                 yield event.plain_result(reply)
                 return
 
-            # ── .coc / 。coc — COC7th 角色卡（分批发送） ──
+            # ── .coc / 。coc — COC7th 角色卡（分批发送，QQ官方Markdown模板） ──
             cm = re.match(r"^coc(\d*)$", lower)
             if cm:
                 num_str = cm.group(1)
@@ -286,38 +286,35 @@ class ZerasosPlugin(Star):
                     yield event.plain_result("用法: .coc / .coc3 / .coc5")
                     return
 
-                # 获取用户名
-                try:
-                    username = event.message_obj.sender.nickname or ""
-                except Exception:
-                    username = ""
+                # TODO: 将 备忘.md 中的模板JSON提交到QQ开放平台后替换为实际ID
+                COC_TEMPLATE_ID = "你的Markdown模板ID"
+                COC_KEYBOARD_ID = "你的按钮模板ID"
 
                 for batch_idx in range(batch_count):
                     cards = [format_coc_char(roll_coc7th()) for _ in range(3)]
 
-                    # 提取每张卡的3行 → 共9行
+                    # 提取每张卡的3行 → 9个参数 c1-c9
                     lines = []
                     for c in cards:
                         parts = c.split("\n")
                         for p in parts[:3]:
                             lines.append(p.strip())
-                    # 补足 9 行（不足补空）
                     while len(lines) < 9:
                         lines.append(" ")
 
-                    msg = (
-                        f"🎲 {username}的属性生成结果\n"
-                        f"\n| 序号 | 属性 |\n"
-                        f"\n| :--- | :--- |\n"
-                        f"\n| 1 | {lines[0]}<br/>{lines[1]}<br/>{lines[2]} |\n"
-                        f"\n| 2 | {lines[3]}<br/>{lines[4]}<br/>{lines[5]} |\n"
-                        f"\n| 3 | {lines[6]}<br/>{lines[7]}<br/>{lines[8]} |\n"
-                        f"\n\n"
-                        f"| .coc | .coc3 | .coc5 |\n"
-                        f"| :---: | :---: | :---: |\n"
-                        f"| 一次(3张) | 三次(9张) | 五次(15张) |"
-                    )
-                    yield event.plain_result(msg.replace("\n", "<br />"))
+                    params = []
+                    for j, line in enumerate(lines):
+                        params.append({"key": f"c{j+1}", "values": [line]})
+                    params.append({"key": "username", "values": [event.get_sender_name()]})
+
+                    payload = {
+                        "markdown": {
+                            "custom_template_id": COC_TEMPLATE_ID,
+                            "params": params
+                        },
+                        "keyboard": {"id": COC_KEYBOARD_ID}
+                    }
+                    await event.bot.send_message(event.target, payload)
 
                     if batch_idx < batch_count - 1:
                         import asyncio
