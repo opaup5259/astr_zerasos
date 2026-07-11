@@ -169,11 +169,11 @@ class ZerasosPlugin(Star):
     # =================== 纯文本区块排版输出 ===================
     @staticmethod
     def _format_card_table(cards: list[str]) -> str:
-        """将多张角色卡格式化为纯文本区块"""
+        """将多张角色卡格式化为纯文本（最后一步替换\n为<br />绕过逗号过滤）"""
         parts = ["\U0001f3b2 \u751f\u6210\u7684\u5c5e\u6027\u5982\u4e0b\uff1a"]
         for i, card in enumerate(cards, 1):
             parts.append(f"\u3010\u7b2c {i} \u5f20\u3011\n{card}")
-        return "\n\n".join(parts)
+        return "\n\n".join(parts).replace("\n", "<br />")
 
     # =================== on_message（互通+签到+表情包） ===================
     @plugin_filter.event_message_type(EventMessageType.ALL)
