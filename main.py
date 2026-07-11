@@ -159,6 +159,14 @@ class ZerasosPlugin(Star):
     async def terminate(self):
         await self.fm.terminate()
 
+    # =================== 多行输出辅助（平台不支持 \n，逐行yield） ===================
+    @staticmethod
+    def _yield_lines(event, text: str):
+        """将多行文本逐行 yield 为独立消息"""
+        for line in text.split("\n"):
+            if line.strip():
+                yield event.plain_result(line.strip())
+
     # =================== on_message（互通+签到+表情包） ===================
     @plugin_filter.event_message_type(EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):
@@ -257,7 +265,8 @@ class ZerasosPlugin(Star):
                 count = int(cm.group(1)) if cm.group(1) else 1
                 count = min(count, 10)
                 for i in range(count):
-                    yield event.plain_result(format_coc_char(roll_coc5th(), i+1))
+                    for r in self._yield_lines(event, format_coc_char(roll_coc5th(), i+1)):
+                        yield r
                 return
 
             cm = re.match(r"^coc(\d*)$", lower)
@@ -271,7 +280,8 @@ class ZerasosPlugin(Star):
                     count = int(num_str) if num_str else 1
                 count = min(count, 10)
                 for i in range(count):
-                    yield event.plain_result(format_coc_char(roll_coc7th(), i+1))
+                    for r in self._yield_lines(event, format_coc_char(roll_coc7th(), i+1)):
+                        yield r
                 return
 
             # ── .dnd / 。dnd / /dnd — DND 5e 角色卡（严格匹配） ──
@@ -280,7 +290,8 @@ class ZerasosPlugin(Star):
                 count = int(dm.group(1)) if dm.group(1) else 1
                 count = min(count, 10)
                 for i in range(count):
-                    yield event.plain_result(format_dnd_char(roll_dnd(), i+1))
+                    for r in self._yield_lines(event, format_dnd_char(roll_dnd(), i+1)):
+                        yield r
                 return
 
             # ── .r / .rd 掷骰（严格匹配，无多余文本） ──

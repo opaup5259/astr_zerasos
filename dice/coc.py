@@ -153,19 +153,15 @@ def format_coc_char(char: dict, index: int = 0) -> str:
     lines = []
     if index > 0:
         lines.append(f"| -- 第 {index} 张 -- |")
-    
-    # 属性 x5
     x5vals = {k: a["value"] * 5 for k, a in attrs.items()}
     total = sum(x5vals.values())
     attr_line = "  ".join(f"{a['name']}:{x5vals[k]:>2}" for k, a in attrs.items())
     lines.append(attr_line)
-    
-    # HP / MP / MOV
     lines.append(f"HP: {char['hp']}  MP: {char['mp']}  MOV:{char['mov']}")
-    # 幸运 / DB / 总值
     lines.append(f"幸运:{char['luck']}  DB: {char['damage_bonus']}  总值:{total}/{total + char['luck']}")
-    
-    return "\n".join(lines)def roll_coc5th() -> dict:
+    return "\n".join(lines)
+
+def roll_coc5th() -> dict:
     """
     生成一张 COC5th 角色卡。
     COC5th 与 COC7th 在基础属性上相似，但衍生计算略有不同。
