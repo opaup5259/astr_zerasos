@@ -225,7 +225,7 @@ class ZerasosPlugin(Star):
             return
 
         self.cm.clear_debug()
-        uid = self.cm._uid(event)
+        uid = normalize_uid(self.cm._uid(event))
         _is_admin = is_admin(uid) if uid else False
 
         if self.cm.debug_mode:
