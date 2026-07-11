@@ -368,7 +368,7 @@ class FanqieManager:
         chapter_title = chapter_state.get("chapter_title", "")
         novel_link = chapter_state.get("novel_link", f"{BASE_URL}/novel/{novel_id}")
         chapter_link = chapter_state.get("chapter_link", "")
-        novel_abstract = chapter_state.get("novel_abstract", "")
+        content = chapter_state.get("content", "")
         novel_cover_url = chapter_state.get("novel_cover_url", "")
 
         # 替换模板占位符
@@ -378,7 +378,7 @@ class FanqieManager:
             f"**书名**：[{novel_title}]({novel_link})\n"
             f"**章节**：{chapter_title}\n\n"
             f"------\n\n"
-            f"{self.escape_md(novel_abstract[:100])}...\n\n"
+            f"{self.escape_md(content[:200])}...\n\n"
             f"------\n\n"
             f"> {ai_comment}\n\n"
             f"[🔗 点击此处开始阅读]({chapter_link})"
