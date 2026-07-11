@@ -4,7 +4,7 @@
 import json, os, logging, re, asyncio
 from datetime import datetime
 from typing import Optional
-from astrbot.api.all import MessageChain
+# from astrbot.api.all import MessageChain
 
 try:
     import aiohttp
@@ -200,35 +200,14 @@ class FanqieManager:
                 all_debug.append(line)
 
             # ── 推送 ──
-            msg_chain = MessageChain().message(broadcast_msg)
+            # msg_chain = MessageChain().message(broadcast_msg)
             md_content = self._prepare_markdown_content(
                 self.data["chapter_states"][novel_id], novel_id, ai_comment
             )
 
             success_count = 0
             for target in self.data.get("target_groups", []):
-                sent = False
-
-                # 尝试 Markdown 模板推送（仅 QQ Official 生效）
-                if not sent:
-                    sent = await self._try_send_markdown(target, md_content)
-
-                # 回退纯文本
-                if not sent:
-                    possible = [target]
-                    if target.isdigit():
-                        possible.extend([
-                            f"default:GroupMessage:{target}",
-                            f"aiocqhttp-group-{target}",
-                            f"group_{target}", f"group-{target}", f"qq_group_{target}",
-                        ])
-                    for umo in possible:
-                        try:
-                            await self.context.send_message(umo, msg_chain)
-                            sent = True
-                            break
-                        except Exception:
-                            continue
+                sent = await self._try_send_markdown(target, md_content)
                 if sent:
                     success_count += 1
 

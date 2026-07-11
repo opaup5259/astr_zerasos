@@ -90,7 +90,7 @@ class ZerasosPlugin(Star):
         self.fm = FanqieManager(
             data_dir=data_dir,
             config=self.config,
-            context=context,
+            context=self,
         )
         self.fm.start_background_loop()
 
