@@ -20,6 +20,7 @@ except ImportError:
 
 
 BASE_URL = "https://fanqienovel.com"
+MARKDOWN_TEMPLATE_ID = "102047593_1783778565"
 
 
 class FanqieManager:
@@ -201,7 +202,7 @@ class FanqieManager:
 
             # ── 推送 ──
             msg_chain = MessageChain().message(broadcast_msg)
-            md_content = self._prepare_markdown_content(
+            md_params = self._prepare_markdown_params(
                 self.data["chapter_states"][novel_id], novel_id, ai_comment
             )
 
@@ -209,9 +210,9 @@ class FanqieManager:
             for target in self.data.get("target_groups", []):
                 sent = False
 
-                # 尝试 Markdown 推送（仅 QQ Official 生效）
+                # 尝试 Markdown 模板推送（仅 QQ Official 生效）
                 if not sent:
-                    sent = await self._try_send_markdown(target, md_content)
+                    sent = await self._try_send_markdown(target, md_params)
 
                 # 回退纯文本
                 if not sent:
@@ -379,37 +380,23 @@ class FanqieManager:
             text = text.replace(c, '\\' + c)
         return text
 
-    def _prepare_markdown_content(self, chapter_state: dict, novel_id: str, ai_comment: str) -> str:
-        """构建原生 Markdown Content 字符串（仿 .coc 角色卡模式）"""
-        novel_title = chapter_state.get("novel_title", "")
-        chapter_title = chapter_state.get("chapter_title", "")
-        novel_link = chapter_state.get("novel_link", f"{BASE_URL}/novel/{novel_id}")
-        chapter_link = chapter_state.get("chapter_link", "")
-        novel_abstract = chapter_state.get("novel_abstract", "")
+    def _prepare_markdown_params(self, chapter_state: dict, novel_id: str, ai_comment: str) -> list[dict]:
+        """构建 Markdown 模板的 params 参数"""
+        return [
+            {"key": "urlfm", "values": [chapter_state.get("novel_cover_url", "")]},
+            {"key": "name", "values": [chapter_state.get("novel_title", "")]},
+            {"key": "url1", "values": [chapter_state.get("novel_link", f"{BASE_URL}/novel/{novel_id}")]},
+            {"key": "name2", "values": [chapter_state.get("chapter_title", "")]},
+            {"key": "content1", "values": [self.escape_md(chapter_state.get("novel_abstract", ""))]},
+            {"key": "content2", "values": [self.escape_md(ai_comment)]},
+            {"key": "url2", "values": [chapter_state.get("chapter_link", "")]},
+        ]
 
-        md_content = (
-            f"### 📚 《{novel_title}》更新啦！\n"
-            f"**最新章节：** [{chapter_title}]({chapter_link})\n\n"
-            f"**🤖 AI 吐槽：**\n> {ai_comment}\n\n"
-            f"**📖 小说简介：**\n{self.escape_md(novel_abstract[:100])}...\n\n"
-            f"🔗 [前往小说主页]({novel_link})"
-        )
-        return md_content
-
-    async def _try_send_markdown(self, target: str, md_content: str) -> bool:
-        """尝试通过 QQ Official Bot API 发送原生 Markdown 消息"""
+    async def _try_send_markdown(self, target: str, params: list[dict]) -> bool:
+        """尝试通过 QQ Official Bot API 发送 Markdown 模板消息"""
         # 从 context 中获取 bot 引用
         bot = getattr(self.context, "bot", None)
-
-        # 兼容处理：后台任务中 getattr 可能拿不到，遍历 context.bots 兜底
-        if not bot and hasattr(self.context, "bots") and isinstance(self.context.bots, dict):
-            for b in self.context.bots.values():
-                if hasattr(b, "api"):
-                    bot = b
-                    break
-
         if not bot or not hasattr(bot, "api"):
-            logging.warning("[番茄] 无法获取 bot.api 实例，Markdown 降级为纯文本发送。")
             return False
 
         # 从 UMO 中提取 group_openid
@@ -420,14 +407,15 @@ class FanqieManager:
         try:
             body = {
                 "markdown": {
-                    "content": md_content,
+                    "custom_template_id": MARKDOWN_TEMPLATE_ID,
+                    "params": params,
                 },
                 "msg_type": 2,
             }
             await bot.api.post_group_message(group_openid=group_openid, **body)
             return True
         except Exception as e:
-            logging.warning(f"[番茄] Markdown 推送失败 ({target[:24]}): {e}")
+            logging.warning(f"[番茄] Markdown 模板推送失败 ({target[:24]}): {e}")
             return False
 
     @staticmethod
