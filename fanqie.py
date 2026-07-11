@@ -378,6 +378,10 @@ class FanqieManager:
         content = chapter_state.get("content", "")
         novel_cover_url = chapter_state.get("novel_cover_url", "")
 
+        # AI 评论：去空行，每行加 > 前缀
+        ai_comment = ai_comment.strip()
+        ai_comment = '\n> '.join(line for line in ai_comment.split('\n') if line.strip())
+
         # 替换模板占位符
         md_content = (
             f"### 📢 小说更新提醒\n"
