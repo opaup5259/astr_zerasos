@@ -135,19 +135,12 @@ class FanqieManager:
 
         all_debug = []
         all_preview = []
-        
-        # 诊断：检查运行环境
-        all_debug.append(f"[Debug] HAS_AIOHTTP={HAS_AIOHTTP}, novel_ids={self.novel_ids}")
 
         for novel_id in self.novel_ids:
             info = await self.fetch_novel_info(novel_id)
 
             if not info or not info["chapter_info"]["id"]:
-                if is_debug:
-                    all_debug.append(f"[Debug] ID:{novel_id} 获取信息失败 (info={info is not None}, id={info.get('chapter_info', {}).get('id', 'N/A') if info else 'info is None'})")
-                else:
-                    all_debug.append(f"[Debug] ID:{novel_id} 获取信息失败")
-                # 同时检查 Docker 日志: docker logs --tail 50 astrbot_wjfb-astrbot_wjFB-1 | grep 番茄爬虫
+                all_debug.append(f"[Debug] ID:{novel_id} 获取信息失败")
                 continue
 
             novel_title = info["title"]
@@ -341,29 +334,21 @@ class FanqieManager:
     # ── HTML 解析 ─────────────────────────────────
     # ── HTTP 请求（通用） ──────────────────────────
     async def _http_get(self, url: str, headers: dict = None, expect_json=False):
-        logging.info(f"[番茄爬虫] _http_get 调用: HAS_AIOHTTP={HAS_AIOHTTP}, expect_json={expect_json}, url={url[:80]}")
         if not HAS_AIOHTTP:
-            logging.info("[番茄爬虫] HAS_AIOHTTP=False，返回空结果")
             return {} if expect_json else None
         default_headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         if headers:
             default_headers.update(headers)
-        logging.info(f"[番茄爬虫] 开始 HTTP 请求...")
         async with aiohttp.ClientSession() as session:
             try:
                 async with session.get(url, headers=default_headers, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-                    logging.info(f"[番茄爬虫] 响应: status={resp.status}, content_type={resp.headers.get('Content-Type', 'N/A')[:50]}")
                     resp.raise_for_status()
                     ct = resp.headers.get("Content-Type", "")
                     if expect_json or "application/json" in ct:
-                        result = await resp.json(content_type=None)
-                        logging.info(f"[番茄爬虫] JSON 解析成功, keys={list(result.keys()) if isinstance(result, dict) else type(result).__name__}")
-                        return result
-                    text = await resp.text()
-                    logging.info(f"[番茄爬虫] 返回文本, len={len(text)}")
-                    return text
+                        return await resp.json(content_type=None)
+                    return await resp.text()
             except Exception as e:
-                logging.info(f"[番茄爬虫] 请求异常: {type(e).__name__}: {e}")
+                logging.error(f"[爬虫] 请求失败 {url[:80]}: {e}")
                 return {} if expect_json else None
 
     # ── Markdown 模板工具 ────────────────────────────
@@ -490,13 +475,8 @@ class FanqieManager:
 
     async def fetch_novel_info(self, novel_id: str) -> Optional[dict]:
         dir_url = f"{BASE_URL}/api/reader/directory/detail?bookId={novel_id}"
-        try:
-            dir_data = await self._http_get(dir_url, expect_json=True)
-        except Exception as e:
-            logging.info(f"[番茄爬虫] _http_get 直接抛异常: {type(e).__name__}: {e}")
-            dir_data = None
+        dir_data = await self._http_get(dir_url, expect_json=True)
         if not dir_data or not isinstance(dir_data, dict):
-            logging.info(f"[番茄爬虫] fetch_novel_info 退出: dir_data={type(dir_data).__name__}, falsy={not dir_data}, is_dict={isinstance(dir_data, dict)}")
             return None
 
         data = dir_data.get("data", {})
@@ -570,7 +550,7 @@ class FanqieManager:
                     novel_cover_url = img["src"]
             else:
                 import re as _re
-                import html as _html  # 用于处理 &amp; 等实体字符
+                import html as _html
 
                 # 使用正向先行断言 (?=...)，使得匹配不再受 class 和 src 先后顺序的限制
                 # [^"]*book-cover-img[^"]* 允许该 class 出现在字符串的任意位置
@@ -580,13 +560,13 @@ class FanqieManager:
                     # 必须进行 unescape，把 &amp; 还原成 &
                     novel_cover_url = _html.unescape(m.group(1))
 
-                return {
-                    "title": novel_title,
-                    "abstract": novel_abstract,
-                    "volume_name": volume_name,
-                    "chapter_info": chapter_info,
-                    "novel_cover_url": novel_cover_url,
-                }
+        return {
+            "title": novel_title,
+            "abstract": novel_abstract,
+            "volume_name": volume_name,
+            "chapter_info": chapter_info,
+            "novel_cover_url": novel_cover_url,
+        }
 
     async def fetch_chapter_detail_async(self, url: str) -> dict:
         html = await self._http_get(url)
