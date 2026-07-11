@@ -94,6 +94,10 @@ class ZerasosPlugin(Star):
         )
         self.fm.start_background_loop()
 
+        # ── Fanqie Markdown 模板推送支持 ──
+        self._fanqie_md_bot = None
+        self._fanqie_group_openid_map: dict[str, str] = {}
+
         # ── BQB（共享 data_dir） ──
         self.bqb = BqbManager(
             data_dir=data_dir,
@@ -159,6 +163,52 @@ class ZerasosPlugin(Star):
     async def terminate(self):
         await self.fm.terminate()
 
+    # =================== Fanqie Markdown 模板推送 ===================
+    async def _fanqie_send_markdown(self, target_umo: str, params: list) -> bool:
+        """
+        向 QQ Official 群发送 Markdown 模板消息。
+        返回 True 表示成功发送，False 表示无法发送（回退纯文本）。
+        """
+        if not self._fanqie_md_bot:
+            logger.info("[番茄-推送] 跳过 Markdown：Bot 引用未就绪")
+            return False
+
+        # 查找 group_openid：先从已捕获的映射找，再从 UMO 格式推断
+        group_openid = self._fanqie_group_openid_map.get(target_umo)
+        if not group_openid:
+            if "qqofficial:group_" in target_umo:
+                idx = target_umo.index("qqofficial:group_") + len("qqofficial:group_")
+                group_openid = target_umo[idx:]
+            elif target_umo.startswith("default:GroupMessage:"):
+                group_openid = target_umo[len("default:GroupMessage:"):]
+            elif ":" in target_umo:
+                parts = target_umo.split(":")
+                last = parts[-1]
+                if "_" in last or not last.isdigit():
+                    group_openid = last
+
+        if not group_openid:
+            logger.info(f"[番茄-推送] 跳过 Markdown：无法识别 group_openid (umo={target_umo[:40]})")
+            return False
+
+        try:
+            body = {
+                "markdown": {
+                    "custom_template_id": "102047593_1783778565",
+                    "params": params,
+                },
+                "msg_type": 2,
+            }
+            await self._fanqie_md_bot.api.post_group_message(
+                group_openid=group_openid,
+                **body,
+            )
+            logger.info(f"[番茄-推送] Markdown 模板发送成功 (group_openid={group_openid[:20]})")
+            return True
+        except Exception as e:
+            logger.error(f"[番茄-推送] Markdown 模板发送失败: {e}")
+            return False
+
     # =================== 多行输出辅助（\n → <br /> 绕过AstrBot逗号过滤） ===================
     @staticmethod
     def _br_text(text):
@@ -186,6 +236,26 @@ class ZerasosPlugin(Star):
         text = event.message_str.strip()
         umo = getattr(event, 'unified_msg_origin', '')
         has_images = bool(self.bqb._extract_images(event))
+
+        # ════════════════════════════════════════════════════
+        # 捕获 QQ Official Bot 引用 + group_openid 映射
+        # 用于 Fanqie 推送 Markdown 模板消息
+        # ════════════════════════════════════════════════════
+        try:
+            role_local = detect_role(umo)
+        except Exception:
+            role_local = "primary"
+        if role_local == "secondary" and not self._fanqie_md_bot:
+            self._fanqie_md_bot = event.bot
+            self.fm.send_markdown_func = self._fanqie_send_markdown
+        if role_local == "secondary" and umo:
+            try:
+                raw = event.message_obj.raw_message
+                group_openid = getattr(raw, "group_openid", None)
+                if group_openid:
+                    self._fanqie_group_openid_map[umo] = group_openid
+            except Exception:
+                pass
 
         # ── 自动检测本消息来自哪个平台 ──
         role = detect_role(umo)
