@@ -319,6 +319,7 @@ class ZerasosPlugin(Star):
                         await event.bot.api.post_group_message(
                             group_openid=raw.group_openid,
                             markdown={"content": md_content},
+                            msg_type=2,
                             msg_id=msg_id,
                             msg_seq=random.randint(1, 10000),
                         )
@@ -326,6 +327,7 @@ class ZerasosPlugin(Star):
                         await event.post_c2c_message(
                             openid=raw.author.user_openid,
                             markdown={"content": md_content},
+                            msg_type=2,
                             msg_id=msg_id,
                             msg_seq=random.randint(1, 10000),
                         )
