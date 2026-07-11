@@ -21,12 +21,18 @@ from astrbot.api.star import StarTools
 importlib.invalidate_caches()
 
 # 热重载时踢掉内存中的旧模块缓存，强制从 .py 重新导入
-_ALL_MODULES = ('checkin', 'fanqie', 'bqb', 'interop')
+_ALL_MODULES = ('checkin', 'fanqie', 'bqb', 'interop', 'dice', 'dice.ra', 'dice.settings', 'dice.coc', 'dice.dnd')
 for _mod in list(sys.modules.keys()):
     if _mod in _ALL_MODULES or any(_mod.startswith(m + '.') for m in _ALL_MODULES):
         del sys.modules[_mod]
 
 from checkin import CheckinManager, set_interop_download_avatar
+from dice import DiceRoller, parse_dice, make_dice_reply, DEFAULT_REPLY_RD
+from dice.settings import init as dice_settings_init
+from dice.settings import get_dice, set_dice, valid_dice_list
+from dice.ra import parse_ra, judge_coc7th, format_ra_reply, DEFAULT_REPLIES as RA_DEFAULT
+from dice.coc import roll_coc7th, roll_coc5th, format_coc_char
+from dice.dnd import roll_dnd, format_dnd_char
 from fanqie import FanqieManager
 from bqb import BqbManager
 from interop import init as interop_init
@@ -39,12 +45,13 @@ from interop import (
     set_http_session_maker,
     get_shared_data_dir,
     bind_user_id, unbind_user_id, get_all_bindings,
+    bind_group, get_bound_group, get_all_group_bindings,
 )
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+番茄监控+表情包+互通", "1.3204")
+@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+互通+骰子+番茄+表情包", "2.0101")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
@@ -94,6 +101,16 @@ class ZerasosPlugin(Star):
             context=context,
         )
 
+        # ── 骰子 ──
+        dice_settings_init(data_dir)
+        self.dice_roller = DiceRoller()
+        self.dice_reply_rd = str(self.config.get("dice_reply_rd", DEFAULT_REPLY_RD))
+        # 加载 RA 回复模板
+        ra_cfg = self.config.get("dice_reply_ra", {})
+        self.ra_replies = {}
+        for key in RA_DEFAULT:
+            self.ra_replies[key] = str(ra_cfg.get("ra_" + key, RA_DEFAULT[key]))
+
     # ── 初始化管理员 ID 列表 ──
     def _init_admin_ids(self):
         """从配置 admin_ids 加载多平台管理员 ID"""
@@ -139,8 +156,8 @@ class ZerasosPlugin(Star):
         self.fm.on_config_update(self.config)
         self.bqb.on_config_update(self.config)
 
-    def terminate(self):
-        self.fm.terminate()
+    async def terminate(self):
+        await self.fm.terminate()
 
     # =================== on_message（互通+签到+表情包） ===================
     @plugin_filter.event_message_type(EventMessageType.ALL)
@@ -184,6 +201,120 @@ class ZerasosPlugin(Star):
                     )
                 else:
                     yield event.plain_result("绑定失败，检查QQ号是否正确。")
+                return
+
+        # ════════════════════════════════════════════════════
+        # 骰子命令：.r / 。r / /r / .dice / 。dice
+        # ════════════════════════════════════════════════════
+        if text and text[0] in ('.', '。', '/'):
+            raw = text[1:].strip()
+            lower = raw.lower()
+
+            # ── .dice set <面数> ──
+            if lower.startswith("dice set") or lower.startswith("骰子 set"):
+                parts = raw.split()
+                if len(parts) >= 3 and parts[2].isdigit():
+                    val = int(parts[2])
+                    if set_dice(umo, platform_uid or "", val):
+                        yield event.plain_result(f"已设置当前骰子为 D{val}")
+                    else:
+                        ok_vals = "/".join(str(v) for v in valid_dice_list())
+                        yield event.plain_result(f"不支持的骰子，支持的骰子：{ok_vals}")
+                else:
+                    yield event.plain_result(f"用法：.dice set 骰子面数（{valid_dice_list()}）")
+                return
+
+            # ── .dice（查看当前骰子） ──
+            if lower in ("dice", "骰子"):
+                current = get_dice(umo, platform_uid or "")
+                yield event.plain_result(f"当前骰子：D{current}")
+                return
+
+            # ── .ra 技能检定 ──
+            if lower.startswith("ra") or lower.startswith("RA"):
+                ra_text = raw[2:].strip() if len(raw) > 2 else ""
+                ra_parsed = parse_ra(ra_text)
+                roll = self.dice_roller.roll(100, user_id=platform_uid or "_anonymous")
+                roll_val = roll["total"]
+                skill_val = ra_parsed["skill_value"]
+                judgment = judge_coc7th(roll_val, skill_val)
+                reply = format_ra_reply(
+                    judgment, roll_val, skill_val,
+                    ra_parsed["skill_name"], "",
+                    self.ra_replies,
+                )
+                yield event.plain_result(reply)
+                return
+
+            # ── .coc / 。coc — COC7th / COC5th 角色卡 ──
+            # .coc       → 1张COC7th
+            # .coc 5     → 5张COC7th
+            # .coc5x1    → 1张COC5th
+            # .coc5x3    → 3张COC5th
+            if lower.startswith("coc5x"):
+                num_str = raw[5:].strip()
+                count = int(num_str) if num_str.isdigit() else 1
+                count = min(count, 10)
+                chars = [format_coc_char(roll_coc5th(), i+1) for i in range(count)]
+                yield event.plain_result("\n\n".join(chars))
+                return
+
+            if lower.startswith("coc5") and not lower.startswith("coc5x"):
+                # coc5 后面的数字是生成数量
+                num_str = raw[3:].strip()
+                count = int(num_str) if num_str.isdigit() else 5
+                count = min(count, 10)
+                chars = [format_coc_char(roll_coc7th(), i+1) for i in range(count)]
+                yield event.plain_result("\n\n".join(chars))
+                return
+
+            if lower.startswith("coc"):
+                num_str = raw[3:].strip()
+                count = int(num_str) if num_str.isdigit() else 1
+                count = min(count, 10)
+                chars = [format_coc_char(roll_coc7th(), i+1) for i in range(count)]
+                yield event.plain_result("\n\n".join(chars))
+                return
+
+            # ── .dnd / 。dnd / /dnd — DND 5e 角色卡 ──
+            if lower.startswith("dnd"):
+                num_str = raw[3:].strip()
+                count = int(num_str) if num_str.isdigit() else 1
+                count = min(count, 10)
+                chars = [format_dnd_char(roll_dnd(), i+1) for i in range(count)]
+                yield event.plain_result("\n\n".join(chars))
+                return
+
+            # ── .r / .rd 掷骰（无表达式时使用已保存的骰子） ──
+            parsed = parse_dice(raw)
+            if parsed or lower in ('r', 'rd', 'R', 'RD'):
+                user_id = platform_uid or "_anonymous"
+                sides = parsed["sides"] if parsed else get_dice(umo, user_id)
+                count = parsed["count"] if parsed else 1
+                modifier = parsed["modifier"] if parsed else 0
+                result = self.dice_roller.roll(
+                    sides=sides,
+                    count=count,
+                    modifier=modifier,
+                    user_id=user_id,
+                )
+                reply = make_dice_reply(result, self.dice_reply_rd)
+                yield event.plain_result(reply)
+                return
+
+        # ════════════════════════════════════════════════════
+        # 群聊绑定：@官方bot 绑定群 <QQ群号>
+        # ════════════════════════════════════════════════════
+        if role == "secondary" and event.is_at_or_wake_command and umo:
+            clean = re.sub(r"^\[At:\S+\]\s*", "", text).strip()
+            match_grp = re.match(r"^/?\s*(绑定群|绑定群聊)\s*(\d{5,})\s*$", clean)
+            if match_grp:
+                group_num = match_grp.group(2)
+                ok = bind_group(umo, group_num)
+                if ok:
+                    yield event.plain_result(f"已绑定本群到 QQ 群 {group_num}")
+                else:
+                    yield event.plain_result("绑定失败。")
                 return
 
         # ════════════════════════════════════════════════════

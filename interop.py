@@ -406,6 +406,49 @@ def normalize_uid(uid: str) -> str:
 
 
 # ============================================================
+# 群聊绑定（三方 bot 和官方 bot 的群标识互通）
+# ============================================================
+
+def bind_group(umo: str, qq_group_number: str) -> bool:
+    """
+    绑定群聊：将 QQ Official 的群 UMO 映射到 QQ 群号。
+    持久化保存，重启不丢。
+    
+    umo 示例：qqofficial:group_xxxx
+    qq_group_number 示例："123456789"
+    """
+    if not umo or not qq_group_number:
+        return False
+    umo = umo.strip()
+    qq_group_number = qq_group_number.strip()
+    if not umo or not qq_group_number:
+        return False
+    _SHARED_STATE.setdefault("group_bindings", {})
+    _SHARED_STATE["group_bindings"][umo] = {
+        "qq_group": qq_group_number,
+        "time": time.time(),
+    }
+    _save_to_disk()
+    logger.info(f"[互通-群绑定] {umo[:30]} → 群 {qq_group_number}")
+    return True
+
+
+def get_bound_group(umo: str) -> Optional[str]:
+    """根据 UMO 获取绑定的 QQ 群号"""
+    bindings = _SHARED_STATE.get("group_bindings", {})
+    entry = bindings.get(umo)
+    if entry:
+        return entry.get("qq_group")
+    return None
+
+
+def get_all_group_bindings() -> dict:
+    """获取所有群绑定记录 {umo: qq_group_number}"""
+    raw = _SHARED_STATE.get("group_bindings", {})
+    return {k: v["qq_group"] for k, v in raw.items()}
+
+
+# ============================================================
 # 去重核心逻辑
 # ============================================================
 def _dedup_key(umo: str, trigger_text: str) -> str:
@@ -533,27 +576,32 @@ def _load_from_disk():
             data = json.load(f)
         _SHARED_STATE["admin_ids"] = data.get("admin_ids", [])
         _SHARED_STATE["user_bindings"] = data.get("user_bindings", {})
+        _SHARED_STATE["group_bindings"] = data.get("group_bindings", {})
         logger.info(
             f"[互通] 加载: 管理员 {len(_SHARED_STATE['admin_ids'])} 人, "
-            f"用户绑定 {len(_SHARED_STATE['user_bindings'])} 条"
+            f"用户绑定 {len(_SHARED_STATE['user_bindings'])} 条, "
+            f"群绑定 {len(_SHARED_STATE['group_bindings'])} 条"
         )
     except Exception as e:
         logger.error(f"[互通] 加载状态失败: {e}")
 
 
 def _save_to_disk():
-    """保存管理员 ID + 用户绑定到磁盘"""
+    """保存管理员 ID + 用户绑定 + 群绑定到磁盘"""
     if not _STATE_FILE:
         return
     try:
         data = {
             "admin_ids": _SHARED_STATE.get("admin_ids", []),
             "user_bindings": _SHARED_STATE.get("user_bindings", {}),
+            "group_bindings": _SHARED_STATE.get("group_bindings", {}),
         }
         with open(_STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         logger.info(
-            f"[互通] 已保存: 管理员 {len(data['admin_ids'])} 人, 用户绑定 {len(data['user_bindings'])} 条"
+            f"[互通] 已保存: 管理员 {len(data['admin_ids'])} 人, "
+            f"用户绑定 {len(data['user_bindings'])} 条, "
+            f"群绑定 {len(data['group_bindings'])} 条"
         )
     except Exception as e:
         logger.error(f"[互通] 保存状态失败: {e}")

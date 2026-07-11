@@ -87,5 +87,62 @@
 		"obvious_hint": true,
 		"default": "",
 		"_special": "select_persona"
+	},
+	"dice": {
+		"type": "object",
+		"description": "骰系功能",
+		"hint": "命运的轨迹在一开始就已经锚定。",
+		"items": {
+			"enable_dice": {
+				"type": "bool",
+				"description": "启用骰子功能",
+				"hint": "开启后可以使用 .r / 。r / /r 等骰子命令进行跑团掷骰。",
+				"default": true
+			},
+			"dice_reply_rd": {
+				"type": "string",
+				"description": "基础骰(rd/r)回复词",
+				"hint": "掷骰后的回复文本。使用 %VER% 作为骰子结果的占位符。默认：骰子在空中旋转……落定：%VER%",
+				"obvious_hint": true,
+				"default": "骰子在空中旋转……落定：%VER%"
+			},
+			"dice_reply_ra": {
+				"type": "object",
+				"description": "技能检定(ra)回复词",
+				"hint": "技能检定后的回复文本。支持占位符 %名称% %技能/原因% %骰子结果（结果值/最大值）%。",
+				"items": {
+					"ra_critical_failure": {
+						"type": "string",
+						"description": "大失败",
+						"default": "%名称%的%技能/原因%检定大失败！（%骰子结果（结果值/最大值）%）"
+					},
+					"ra_failure": {
+						"type": "string",
+						"description": "失败",
+						"default": "%名称%的%技能/原因%检定失败。（%骰子结果（结果值/最大值）%）"
+					},
+					"ra_success": {
+						"type": "string",
+						"description": "成功",
+						"default": "%名称%的%技能/原因%检定成功。（%骰子结果（结果值/最大值）%）"
+					},
+					"ra_hard_success": {
+						"type": "string",
+						"description": "困难成功",
+						"default": "%名称%的%技能/原因%检定困难成功！（%骰子结果（结果值/最大值）%）"
+					},
+					"ra_extreme_success": {
+						"type": "string",
+						"description": "极难成功",
+						"default": "%名称%的%技能/原因%检定极难成功！！（%骰子结果（结果值/最大值）%）"
+					},
+					"ra_critical_success": {
+						"type": "string",
+						"description": "大成功",
+						"default": "%名称%的%技能/原因%检定大成功！！（%骰子结果（结果值/最大值）%）"
+					}
+				}
+			}
+		}
 	}
 }

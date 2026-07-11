@@ -1,6 +1,6 @@
 name: 泽拉索斯
-desc: 泽拉索斯 —— 签到+互通+番茄+表情包
-help: "签到 /zer help 查看全部指令"
-version: "1.3204"
+desc: 泽拉索斯 —— 签到+互通+骰子+番茄+表情包
+help: ".r 掷骰 /zer help 查看全部指令"
+version: "2.0101"
 author: "opaup"
 repo: "https://github.com/opaup5259/astr_zerasos.git"

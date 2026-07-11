@@ -110,7 +110,7 @@ class FanqieManager:
         if self.task is None or self.task.done():
             self.task = asyncio.create_task(self._background_check_loop())
 
-    def terminate(self):
+    async def terminate(self):
         if self.task and not self.task.done():
             self.task.cancel()
             self.task = None
