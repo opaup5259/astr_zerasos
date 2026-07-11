@@ -1,11 +1,24 @@
 # 更新日志
 
-## 1.3103 (2026-07-10)
+## 1.3201 (2026-07-11)
 ### 新增
-- /zra bqb remake <id> 重新用AI生成标签
+- 【互通模块】`interop.py` — 双Bot数据互通与去重引擎
+  - 多平台管理员ID支持（QQ号 + openid 共存）
+  - 消息去重：同群同消息只让一个Bot回复（thread-safe）
+  - 跨平台用户ID映射（openid ↔ QQ号自动关联）
+  - 头像代理：QQ Official 自动通过用户映射获取头像
+  - 本地头像缓存，避免重复下载
+  - 配置面板新增 `admin_ids`（列表）和 `platform_role`（primary/secondary）
+- 命令前缀 `/zra` → `/zer`（帮助文本、指令名、报错信息全面更名）
+- 新增 `/zer interop status` 和 `/zer interop admin` 管理指令
+- 帮助格式全面优化，按功能分组显示
 
 ### 修复
 - 大幅强化表情包标签 prompt：OCR 文字提取必放首位 + 8-15个多维度标签 + 梗文化理解 + 聊天用途分析
+
+## 1.3103 (2026-07-10)
+### 新增
+- /zra bqb remake <id> 重新用AI生成标签
 
 ## 1.3102 (2026-07-10)
 ### 修复

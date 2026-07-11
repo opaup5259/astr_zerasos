@@ -21,18 +21,27 @@ from astrbot.api.star import StarTools
 importlib.invalidate_caches()
 
 # 热重载时踢掉内存中的旧模块缓存，强制从 .py 重新导入
+_ALL_MODULES = ('checkin', 'fanqie', 'bqb', 'interop')
 for _mod in list(sys.modules.keys()):
-    if _mod in ('checkin', 'fanqie', 'bqb') or _mod.startswith('checkin.') or _mod.startswith('fanqie.') or _mod.startswith('bqb.'):
+    if _mod in _ALL_MODULES or any(_mod.startswith(m + '.') for m in _ALL_MODULES):
         del sys.modules[_mod]
 
-from checkin import CheckinManager
+from checkin import CheckinManager, set_interop_download_avatar
 from fanqie import FanqieManager
 from bqb import BqbManager
+from interop import init as interop_init
+from interop import (
+    should_respond, mark_sent, is_admin,
+    load_admin_ids, set_admin_ids, add_admin_id,
+    record_user_ids, get_qq_from_openid,
+    has_cached_avatar, cache_avatar, download_avatar,
+    set_platform_role, set_http_session_maker,
+)
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+番茄监控+表情包", "1.3103")
+@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+番茄监控+表情包+互通", "1.3201")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
@@ -41,6 +50,22 @@ class ZerasosPlugin(Star):
         # ── data_dir ──
         data_dir = str(StarTools.get_data_dir("zerasos_bot"))
         os.makedirs(data_dir, exist_ok=True)
+
+        # ── Interop 互通模块（全局初始化一次即可） ──
+        interop_init(data_dir)
+        self._init_admin_ids()
+
+        # 平台角色：primary（QQ 官方 Bot）/ secondary（OneBot v11）
+        self.platform_role = str(self.config.get("platform_role", "primary"))
+        set_platform_role(self.platform_role)
+        set_http_session_maker(lambda: None)  # 由 download_avatar 内部自行创建 session
+        # 注入头像代理到 checkin 模块
+        try:
+            from interop import download_avatar as _ia
+            set_interop_download_avatar(_ia)
+        except Exception as e:
+            logger.warning(f"[泽拉索斯] 头像代理注入失败: {e}")
+        logger.info(f"[泽拉索斯] 互通模式: platform_role={self.platform_role}")
 
         # ── Checkin ──
         enable_checkin = bool(self.config.get("enable_checkin", True))
@@ -73,7 +98,26 @@ class ZerasosPlugin(Star):
             context=context,
         )
 
-    # =================== 字体查找 ===================
+    # ── 初始化管理员 ID 列表 ──
+    def _init_admin_ids(self):
+        """
+        从 config 加载管理员 ID，支持多种格式：
+        - 新版：admin_ids (list)
+        - 旧版：admin_qq (str)
+        - 新旧同时存在时合并去重
+        """
+        existing = set(load_admin_ids())
+        ids_list = self.config.get("admin_ids", [])
+        if isinstance(ids_list, list):
+            for uid in ids_list:
+                if uid and str(uid).strip():
+                    existing.add(str(uid).strip())
+        admin_qq = str(self.config.get("admin_qq", "")).strip()
+        if admin_qq:
+            existing.add(admin_qq)
+        if existing:
+            set_admin_ids(sorted(existing))
+
     @staticmethod
     def _find_font() -> Optional[str]:
         # ARHei 优先
@@ -97,6 +141,11 @@ class ZerasosPlugin(Star):
     # =================== 热重载 ===================
     def on_config_update(self, config: dict):
         self.config = config or {}
+
+        # 互通配置热更新
+        self.platform_role = str(self.config.get("platform_role", "primary"))
+        self._init_admin_ids()
+
         self.cm.update_config(
             enable_checkin=bool(self.config.get("enable_checkin", True)),
             debug_mode=bool(self.config.get("debug_mode", False)),
@@ -108,11 +157,46 @@ class ZerasosPlugin(Star):
     def terminate(self):
         self.fm.terminate()
 
-    # =================== on_message（签到+表情包） ===================
+    # =================== on_message（互通+签到+表情包） ===================
     @plugin_filter.event_message_type(EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):
         text = event.message_str.strip()
+        umo = getattr(event, 'unified_msg_origin', '')
         has_images = bool(self.bqb._extract_images(event))
+
+        # ── 提取本平台用户 ID ──
+        try:
+            platform_uid = str(event.message_obj.sender.user_id)
+        except Exception:
+            platform_uid = ""
+
+        # ════════════════════════════════════════════════════
+        # 跨平台用户 ID 映射：两平台同时记录同一消息的用户 ID
+        # 用于建立 openid ↔ QQ 号的映射（头像代理等）
+        # ════════════════════════════════════════════════════
+        if text and platform_uid:
+            record_user_ids(umo, text, self.platform_role, platform_uid)
+
+        # ════════════════════════════════════════════════════
+        # 互通去重：根据 platform_role 判断是否应当处理此消息
+        # primary  → 直接处理并标记已发送
+        # secondary → 检测 primary 是否已处理/已发送
+        # ════════════════════════════════════════════════════
+        if text and not text.startswith("/"):
+            should_handle = should_respond(umo, text, self.platform_role)
+        else:
+            should_handle = True
+
+        if not should_handle:
+            if self.cm.debug_mode:
+                logger.info(
+                    f"[互通] secondary 跳过: 同消息已被 primary 处理 "
+                    f"(umo={umo[:40] if umo else ''})"
+                )
+            # BQB 偷图不受去重影响（偷图是单向行为，不产生回复）
+            if has_images:
+                await self.bqb.maybe_steal(event)
+            return
 
         # ── BQB：有图则概率偷取 ──
         if has_images:
@@ -123,6 +207,9 @@ class ZerasosPlugin(Star):
             if not has_images and not text.startswith("/"):
                 bqb_path = await self.bqb.maybe_send(event, text)
                 if bqb_path:
+                    # BQB 发送前也标记互通
+                    if text:
+                        mark_sent(umo, text, self.platform_role)
                     yield event.image_result(bqb_path)
 
         # ── 签到逻辑 ──
@@ -133,7 +220,7 @@ class ZerasosPlugin(Star):
 
         self.cm.clear_debug()
         uid = self.cm._uid(event)
-        is_admin = (uid == self.cm.admin_qq)
+        _is_admin = is_admin(uid) if uid else False
 
         if self.cm.debug_mode:
             self.cm._dlog(f"收到消息: '{text}' | uid={uid} | is_at_or_wake={event.is_at_or_wake_command}")
@@ -143,7 +230,7 @@ class ZerasosPlugin(Star):
             self.cm._dlog(f"关键词: '{text}' -> {trigger_type or '未匹配'}")
 
         if trigger_type is None:
-            if self.cm.debug_mode and is_admin:
+            if self.cm.debug_mode and _is_admin:
                 yield event.plain_result(self.cm.debug_result())
             async for r in _try_bqb_send():
                 yield r
@@ -152,12 +239,12 @@ class ZerasosPlugin(Star):
         if trigger_type == "soft" and event.is_at_or_wake_command:
             if self.cm.debug_mode:
                 self.cm._dlog("软触发被跳过: is_at_or_wake_command=True")
-            if self.cm.debug_mode and is_admin:
+            if self.cm.debug_mode and _is_admin:
                 yield event.plain_result(self.cm.debug_result())
             return
 
         if not uid:
-            if self.cm.debug_mode and is_admin:
+            if self.cm.debug_mode and _is_admin:
                 yield event.plain_result(self.cm.debug_result())
             return
 
@@ -167,12 +254,15 @@ class ZerasosPlugin(Star):
         nickname = self.cm._nickname(event)
         result = await self.cm.process_checkin(uid, nickname, trigger_type)
         if result:
+            # 签到回复：标记互通
+            if text:
+                mark_sent(umo, text, self.platform_role)
             yield self._render_result(event, result)
 
     # =================== 指令代理 ===================
     @command("checkin")
     async def checkin_cmd(self, event: AstrMessageEvent):
-        """快捷签到，等价于 /zra checkin"""
+        """快捷签到，等价于 /zer checkin"""
         if not self.cm.enable_checkin:
             yield event.plain_result("签到功能未开启。")
             return
@@ -184,52 +274,65 @@ class ZerasosPlugin(Star):
         if result:
             yield self._render_result(event, result)
 
-    # =================== /zra 父指令 ===================
-    @command("zra")
-    async def zra_router(self, event: AstrMessageEvent):
+    # =================== /zer 父指令 ===================
+    @command("zer")
+    async def zer_router(self, event: AstrMessageEvent):
         uid = str(event.message_obj.sender.user_id)
         text = event.message_str.strip()
         parts = text.split()
         subcmd = parts[1].lower() if len(parts) >= 2 else "help"
         sender = uid
-        admin = self.config.get("admin_qq", "")
+        _is_admin = is_admin(sender)
 
         # ── help ──
         if subcmd == "help":
             yield event.plain_result(
-                "📖 泽拉索斯帮助\n"
-                "━━━━━━━━━━━━━━\n"
-                "签到\n"
-                "  /zra checkin          手动签到\n"
-                "  /签到 /打卡 早安等    关键词自动签到\n"
+                "═══════════════════════════════════════\n"
+                "         ✦ 泽拉索斯 · 使用指南 ✦\n"
+                "═══════════════════════════════════════\n"
                 "\n"
-                "表情包\n"
-                "  /zra bqb list [页]    查看表情包列表\n"
-                "  /zra bqb get <id>     获取指定表情包\n"
+                "▎签到（所有人可用）\n"
+                "  /zer checkin     手动签到\n"
+                "  /签到 /打卡       关键词自动签到\n"
+                "  早安 晚安 安安    自动签到（软触发）\n"
                 "\n"
-                "管理（需管理员QQ）\n"
-                "  /zra list [页数]      签到排行榜\n"
-                "  /zra search <QQ>      查询指定用户签到\n"
-                "  /zra reset force      重置签到\n"
-                "  /zra bqb remove <id>  删除表情包\n"
-                "  /zra bqb modify <id> <标签>  修改表情包标签\n"
-                "  /zra bqb remake <id>   重新用AI生成标签\n"
-                "  /zra bqb add +图片    手动添加表情包\n"
+                "▎表情包（所有人可用）\n"
+                "  /zer bqb list [页]    浏览表情包\n"
+                "  /zer bqb get <编号>   获取表情包\n"
                 "\n"
-                "番茄小说监控（管理员）\n"
-                "  /zra fanqie force     强制检查并播报\n"
-                "  /zra fanqie add       绑定当前群为推送目标\n"
-                "  /zra fanqie del       移出推送\n"
-                "  /zra fanqie list      查看推送群聊\n"
-                "  /zra fanqie reset     清空章节缓存\n"
-                "  /zra fanqie get_umo   获取当前群标识\n"
+                "▎互通管理（管理员）\n"
+                "  /zer interop status   查看互通状态\n"
+                "  /zer interop admin    管理员ID列表\n"
+                "  /zer interop admin add <ID>   添加\n"
+                "  /zer interop admin del <ID>   移除\n"
                 "\n"
-                "WebUI 配置签到/番茄/表情包参数\n"
+                "▎签到管理（管理员）\n"
+                "  /zer list [页数]    签到排行榜\n"
+                "  /zer search <QQ>    查询签到详情\n"
+                "  /zer reset confirm force  重置全部\n"
+                "\n"
+                "▎表情包管理（管理员）\n"
+                "  /zer bqb add +图片     添加表情包\n"
+                "  /zer bqb remove <id>   删除表情包\n"
+                "  /zer bqb modify <id> <标签>  改标签\n"
+                "  /zer bqb remake <id>   AI重新打标\n"
+                "\n"
+                "▎番茄小说监控（管理员）\n"
+                "  /zer fanqie force     强制检查更新\n"
+                "  /zer fanqie add       绑定本群为推送目标\n"
+                "  /zer fanqie del       移出推送列表\n"
+                "  /zer fanqie list      查看推送群聊\n"
+                "  /zer fanqie reset     清空章节缓存\n"
+                "  /zer fanqie get_umo   获取群标识\n"
+                "\n"
+                "═══════════════════════════════════════\n"
+                "💡 WebUI 配置签到/番茄/表情包参数\n"
+                "💡 互通角色：primary=三方Bot  secondary=官方Bot\n"
             )
             return
 
-        # ── 管理员权限检查 ──
-        if sender != admin:
+        # ── 管理员权限检查（支持多平台 ID） ──
+        if not _is_admin:
             yield event.plain_result("你没有权限。")
             return
 
@@ -255,7 +358,7 @@ class ZerasosPlugin(Star):
 
         if subcmd == "search":
             if len(parts) < 3:
-                yield event.plain_result("用法: /zra search <QQ号>")
+                yield event.plain_result("用法: /zer search <QQ号>")
                 return
             text = self.cm.search_user(parts[2])
             yield event.plain_result(text or f"未找到 QQ {parts[2]} 的签到记录。")
@@ -263,7 +366,7 @@ class ZerasosPlugin(Star):
 
         if subcmd == "reset":
             if len(parts) < 4 or parts[-2] != "confirm" or parts[-1] != "force":
-                yield event.plain_result("用法: /zra reset confirm force")
+                yield event.plain_result("用法: /zer reset confirm force")
                 return
             await self.cm.reset_all()
             yield event.plain_result("已重置所有签到数据和缓存图片。")
@@ -301,7 +404,7 @@ class ZerasosPlugin(Star):
             elif fcmd == "list":
                 groups = self.fm.data.get("target_groups", [])
                 if not groups:
-                    yield event.plain_result("推送列表为空。\n💡 在目标群发送 /zra fanqie add 即可绑定")
+                    yield event.plain_result("推送列表为空。\n💡 在目标群发送 /zer fanqie add 即可绑定")
                 else:
                     res = "当前推送群聊:\n" + "\n".join(f"- {g}" for g in groups)
                     yield event.plain_result(res)
@@ -315,11 +418,63 @@ class ZerasosPlugin(Star):
             elif fcmd == "get_umo":
                 yield event.plain_result(
                     f"✅ 当前底层标识 (UMO):\n{event.unified_msg_origin}\n\n"
-                    f"💡 用 /zra fanqie add 绑定即可 100% 投递"
+                    f"💡 用 /zer fanqie add 绑定即可 100% 投递"
                 )
 
             else:
-                yield event.plain_result("用法: /zra fanqie <force|add|del|list|reset|get_umo>")
+                yield event.plain_result("用法: /zer fanqie <force|add|del|list|reset|get_umo>")
+            return
+
+        # ── interop 互通管理 ──
+        if subcmd == "interop":
+            if len(parts) < 3:
+                yield event.plain_result(
+                    "用法:\n"
+                    "  /zer interop status     查看去重状态\n"
+                    "  /zer interop admin      查看管理员ID列表\n"
+                    "  /zer interop admin add <ID>   添加管理员ID\n"
+                    "  /zer interop admin del <ID>   移除管理员ID"
+                )
+                return
+
+            icmd = parts[2].lower()
+
+            if icmd == "status":
+                from interop import _SHARED_STATE
+                pending = len(_SHARED_STATE.get("processing_locks", {}))
+                sent = len(_SHARED_STATE.get("sent_marks", {}))
+                admins = _SHARED_STATE.get("admin_ids", [])
+                yield event.plain_result(
+                    f"🌐 互通状态\n"
+                    f"平台角色: {self.platform_role}\n"
+                    f"处理中锁: {pending}\n"
+                    f"已发送标记: {sent}\n"
+                    f"管理员 ({len(admins)}人): {' '.join(admins) if admins else '未设置'}"
+                )
+
+            elif icmd == "admin":
+                admins = load_admin_ids()
+                if len(parts) >= 5:
+                    adm_cmd = parts[3].lower()
+                    target_id = parts[4]
+                    if adm_cmd == "add":
+                        add_admin_id(target_id)
+                        yield event.plain_result(f"✅ 已添加管理员 {target_id}")
+                    elif adm_cmd == "del":
+                        cur = load_admin_ids()
+                        if target_id in cur:
+                            new_ids = [x for x in cur if x != target_id]
+                            set_admin_ids(new_ids)
+                            yield event.plain_result(f"✅ 已移除管理员 {target_id}")
+                        else:
+                            yield event.plain_result(f"❌ 未找到 {target_id}")
+                    else:
+                        yield event.plain_result("用法: /zer interop admin <add|del> <ID>")
+                else:
+                    yield event.plain_result(
+                        f"管理员ID列表 ({len(admins)}人):\n"
+                        + ("\n".join(f"- {x}" for x in admins) if admins else "未设置")
+                    )
             return
 
         # ── bqb ──
@@ -340,7 +495,7 @@ class ZerasosPlugin(Star):
 
             elif bcmd == "remove":
                 if len(parts) < 4 or not parts[3].isdigit():
-                    yield event.plain_result("用法: /zra bqb remove <id>")
+                    yield event.plain_result("用法: /zer bqb remove <id>")
                     return
                 num = int(parts[3])
                 if self.bqb.remove_bqb(num):
@@ -350,7 +505,7 @@ class ZerasosPlugin(Star):
 
             elif bcmd == "get":
                 if len(parts) < 4 or not parts[3].isdigit():
-                    yield event.plain_result("用法: /zra bqb get <id>")
+                    yield event.plain_result("用法: /zer bqb get <id>")
                     return
                 num = int(parts[3])
                 path = self.bqb.get_bqb_path(num)
@@ -363,7 +518,7 @@ class ZerasosPlugin(Star):
                 # 从消息中提取图片
                 urls = self.bqb._extract_images(event)
                 if not urls:
-                    yield event.plain_result("请同时发送图片。用法: 发送带图消息 + /zra bqb add")
+                    yield event.plain_result("请同时发送图片。用法: 发送带图消息 + /zer bqb add")
                     return
                 added = 0
                 for url in urls[:3]:
@@ -374,7 +529,7 @@ class ZerasosPlugin(Star):
 
             elif bcmd == "modify":
                 if len(parts) < 5 or not parts[3].isdigit():
-                    yield event.plain_result("用法: /zra bqb modify <id> <标签1,标签2,...>")
+                    yield event.plain_result("用法: /zer bqb modify <id> <标签1,标签2,...>")
                     return
                 num = int(parts[3])
                 tags_str = " ".join(parts[4:])
@@ -385,7 +540,7 @@ class ZerasosPlugin(Star):
 
             elif bcmd == "remake":
                 if len(parts) < 4 or not parts[3].isdigit():
-                    yield event.plain_result("用法: /zra bqb remake <id>")
+                    yield event.plain_result("用法: /zer bqb remake <id>")
                     return
                 num = int(parts[3])
                 yield event.plain_result(f"⏳ 正在重新分析表情包 #{num}...")
@@ -398,11 +553,11 @@ class ZerasosPlugin(Star):
                     yield event.plain_result(f"❌ 未找到表情包 #{num}")
 
             else:
-                yield event.plain_result("用法: /zra bqb <list|add|remove|get|modify|remake>")
+                yield event.plain_result("用法: /zer bqb <list|add|remove|get|modify|remake>")
             return
 
         # ── 未知子指令 ──
-        yield event.plain_result(f"未知指令 /zra {subcmd}，发送 /zra help 查看帮助")
+        yield event.plain_result(f"未知指令 /zer {subcmd}，发送 /zer help 查看帮助")
 
     # =================== 工具 ===================
     @staticmethod

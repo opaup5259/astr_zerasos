@@ -17,6 +17,15 @@ try:
 except ImportError:
     HAS_PIL = False
 
+# 互通头像代理
+INTEROP_DOWNLOAD_AVATAR = None
+
+
+def set_interop_download_avatar(func):
+    """注入 interop 的头像代理下载函数"""
+    global INTEROP_DOWNLOAD_AVATAR
+    INTEROP_DOWNLOAD_AVATAR = func
+
 HARD_KEYWORDS = {"签到", "打卡", "/签到", "/打卡"}
 SOFT_KEYWORDS = {"早安", "早上好", "安安", "日安", "午安", "晚安", "晚上好"}
 SINGLE_EARLY = re.compile(r"^早$")
@@ -114,6 +123,13 @@ class CheckinManager:
         return f"http://q.qlogo.cn/headimg_dl?dst_uin={uid}&spec=640"
 
     async def _download_avatar(self, uid: str) -> Optional[bytes]:
+        # 优先使用互通头像代理（支持跨平台映射 + 本地缓存）
+        if INTEROP_DOWNLOAD_AVATAR:
+            try:
+                return await INTEROP_DOWNLOAD_AVATAR(uid)
+            except Exception:
+                pass
+        # 降级：直接通过 qlogo.cn 下载（OneBot v11 平台有效）
         if not HAS_AIOHTTP:
             return None
         try:

@@ -11,10 +11,25 @@
 	},
 	"admin_qq": {
 		"type": "string",
-		"description": "管理员 QQ 号",
-		"hint": "拥有发送 /checkin /fanqie /zra bqb 等管理指令的权限",
-		"obvious_hint": true,
+		"description": "管理员 QQ 号（旧版单号填写）",
+		"hint": "新版请改用下文的 admin_ids 列表，此字段保留向后兼容",
+		"obvious_hint": false,
 		"default": ""
+	},
+	"admin_ids": {
+		"type": "list",
+		"description": "管理员 ID 列表（多平台）",
+		"hint": "这里填所有管理员账号的 ID。OneBot v11 填 QQ 号，QQ 官方 Bot 填 openid。填写后 /zer 系列指令即可在这些账号下执行。",
+		"obvious_hint": true,
+		"default": []
+	},
+	"platform_role": {
+		"type": "string",
+		"description": "互通平台角色 — 数据以第三方bot为主",
+		"hint": "primary = 第三方OneBot v11（数据主体、优先回复），secondary = QQ 官方 Bot（检测primary是否已发）。在QQ官方Bot配置页选 secondary，在OneBot v11配置页选 primary。",
+		"obvious_hint": true,
+		"default": "primary",
+		"options": ["primary", "secondary"]
 	},
 	"bqb": {
 		"type": "object",
