@@ -889,15 +889,13 @@ class ZerasosPlugin(Star):
         if hasattr(raw, "group_openid") and raw.group_openid:
             await event.bot.api.post_group_message(
                 group_openid=raw.group_openid,
-                content={"embed": embed_data},
-                msg_type = 4,
+                embed=embed_data,
                 msg_id=msg_id,
             )
             if debug_msg:
                 await event.bot.api.post_group_message(
                     group_openid=raw.group_openid,
-                    content={"embed": embed_data},
-                    msg_type = 4,
+                    content=debug_msg,
                     msg_id=msg_id,
                 )
 
