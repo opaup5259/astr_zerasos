@@ -872,6 +872,7 @@ class ZerasosPlugin(Star):
     async def _send_embed(event, embed_data: dict, debug_msg: str = ""):
         """通过 QQ Official Bot API 发送 embed 消息。
         debug_msg 非空时额外发送一条 debug 消息到聊天。"""
+        import random
         raw = event.message_obj.raw_message
         msg_id = event.message_obj.message_id
 
@@ -892,12 +893,14 @@ class ZerasosPlugin(Star):
                 embed=embed_data,
                 msg_type=4,
                 msg_id=msg_id,
+                msg_seq=random.randint(1, 10000),
             )
             if debug_msg:
                 await event.bot.api.post_group_message(
                     group_openid=raw.group_openid,
                     content=debug_msg,
                     msg_id=msg_id,
+                    msg_seq=random.randint(1, 10000),
                 )
 
     # =================== 工具 ===================
