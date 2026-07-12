@@ -895,6 +895,7 @@ class ZerasosPlugin(Star):
             await event.bot.api.post_group_message(
                 group_openid=raw.group_openid,
                 markdown={"content": md_content},
+                msg_type=2,
                 msg_id=msg_id,
                 msg_seq=random.randint(1, 10000),
             )
