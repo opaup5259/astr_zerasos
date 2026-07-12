@@ -495,7 +495,7 @@ class ZerasosPlugin(Star):
             #     await self._send_embed(event, result["embed_data"])
             # else:
             #     yield self._render_result(event, result)
-            yield self._send_embed(result)
+            yield self._send_embed(event, result)
 
     # =================== 指令代理 ===================
     @command("checkin")
