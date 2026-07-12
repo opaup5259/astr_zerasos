@@ -867,30 +867,27 @@ class ZerasosPlugin(Star):
         # ── 未知子指令 ──
         yield event.plain_result(f"未知指令 /zera {subcmd}，发送 /zera help 查看帮助")
 
-    # =================== Embed 发送 ===================
+    # =================== Markdown 签到消息 ===================
     @staticmethod
     async def _send_embed(event, embed_data: dict, debug_msg: str = ""):
-        """通过 QQ Official Bot API 发送 embed 消息。
+        """通过 QQ Official Bot API 发送签到消息（Markdown 格式）。
         debug_msg 非空时额外发送一条 debug 消息到聊天。"""
         import random
         raw = event.message_obj.raw_message
         msg_id = event.message_obj.message_id
 
-        # 手动构建 Embed 对象
-
-        # embed = {
-        #     "embed":{
-        #         "title": embed_data.get("title"),
-        #         "prompt": embed_data.get("prompt"),
-        #         "thumbnail": embed_data.get("thumbnail", {}).get("url"),
-        #         "fields": [EmbedField(name=f.get("name")) for f in embed_data.get("fields", [])],
-        #     }
-        # }
+        # 构建 Markdown 内容
+        title = embed_data.get("title", "签到")
+        fields = embed_data.get("fields", [])
+        md_lines = [f"## {title}"]
+        for f in fields:
+            md_lines.append(f"- {f.get('name', '')}")
+        md_content = "\n".join(md_lines)
 
         if hasattr(raw, "group_openid") and raw.group_openid:
             await event.bot.api.post_group_message(
                 group_openid=raw.group_openid,
-                embed=embed_data,
+                markdown={"content": md_content},
                 msg_id=msg_id,
                 msg_seq=random.randint(1, 10000),
             )
