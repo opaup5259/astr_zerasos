@@ -17,6 +17,7 @@ from astrbot.api.all import *
 from astrbot.api.event import filter as plugin_filter
 from astrbot.api.event.filter import EventMessageType
 from astrbot.api.star import StarTools
+from botpy.message import Embed, EmbedField, EmbedThumbnail
 
 importlib.invalidate_caches()
 
@@ -870,16 +871,24 @@ class ZerasosPlugin(Star):
         raw = event.message_obj.raw_message
         msg_id = event.message_obj.message_id
 
+        # 手动构建 Embed 对象
+        embed = Embed(
+            title=embed_data.get("title"),
+            prompt=embed_data.get("prompt"),
+            thumbnail=EmbedThumbnail(url=embed_data.get("thumbnail", {}).get("url")),
+            fields=[EmbedField(name=f.get("name")) for f in embed_data.get("fields", [])],
+        )
+
         if hasattr(raw, "group_openid") and raw.group_openid:
             await event.bot.api.post_group_message(
                 group_openid=raw.group_openid,
-                embed=embed_data,
+                embed=embed,
                 msg_id=msg_id,
             )
         elif hasattr(raw, "author") and hasattr(raw.author, "user_openid"):
             await event.post_c2c_message(
                 openid=raw.author.user_openid,
-                embed=embed_data,
+                embed=embed,
             )
 
     # =================== 工具 ===================
