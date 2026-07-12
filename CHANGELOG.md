@@ -2,8 +2,10 @@
 
 ## 2.0203 (2026-07-13)
 ### 变更
-- `on_message` 增加 `/zera` `/checkin` 提前返回，防止重复处理
+- `on_message` 增加 `/zera` `/checkin` `/help` 提前返回，防止重复处理
 - 签到回复 Markdown 图片改用 QQ Official Bot 原生语法 `![签到背景#400px#300px]()`，4:3 等比缩放
+- 新增 `/help` 指令，等价于 `/zera help`
+- `/zera help` 及 `/help` 改为发送图片 `res/zerasos-help.png`，不再使用纯文字
 
 ## 2.0202 (2026-07-13)
 ### 变更

@@ -190,8 +190,8 @@ class ZerasosPlugin(Star):
     async def on_message(self, event: AstrMessageEvent):
         text = event.message_str.strip()
 
-        # 指令类消息由 @filter.command 处理，此处跳过避免重复触发 LLM
-        if text.startswith("/zera") or text.startswith("/checkin"):
+        # 指令类消息由 @command 处理，此处跳过避免重复触发 LLM
+        if text.startswith("/zera") or text.startswith("/checkin") or text.startswith("/help"):
             return
 
         umo = getattr(event, 'unified_msg_origin', '')
@@ -502,7 +502,7 @@ class ZerasosPlugin(Star):
             # else:
             #     yield self._render_result(event, result)
             debug_msg = self.cm.debug_result() if self.cm.debug_mode else ""
-            await self._send_embed(event, result.get("embed_data", {}), self.image_url, debug_msg=debug_msg)
+            await self._send_checkin_md(event, result.get("embed_data", {}), self.image_url, debug_msg=debug_msg)
 
     # =================== 指令代理 ===================
     @command("checkin")
@@ -519,7 +519,7 @@ class ZerasosPlugin(Star):
         if result:
             debug_msg = self.cm.debug_result() if self.cm.debug_mode else ""
             if result.get("embed_data"):
-                await self._send_embed(event, result["embed_data"], self.image_url, debug_msg=debug_msg)
+                await self._send_checkin_md(event, result["embed_data"], self.image_url, debug_msg=debug_msg)
             else:
                 yield self._render_result(event, result)
 
@@ -535,52 +535,11 @@ class ZerasosPlugin(Star):
 
         # ── help ──
         if subcmd == "help":
-            yield event.plain_result(self._br_text(
-                "═══════════════════════════════════════\n"
-                "         ✦ 泽拉索斯 · 使用指南 ✦\n"
-                "═══════════════════════════════════════\n"
-                "\n"
-                "▎签到（所有人可用）\n"
-                "  /zera checkin     手动签到\n"
-                "  /签到 /打卡       关键词自动签到\n"
-                "  早安 晚安 安安    自动签到（软触发）\n"
-                "\n"
-                "▎表情包（所有人可用）\n"
-                "  /zera bqb list [页]    浏览表情包\n"
-                "  /zera bqb get <编号>   获取表情包\n"
-                "\n"
-                "▎番茄小说监控\n"
-                "  /zera fanqie add       绑定本群为推送目标\n"
-                "  /zera fanqie del       移出推送列表\n"
-                "  /zera fanqie list      查看推送群聊\n"
-                "  /zera fanqie get_umo   获取群标识\n"
-                "\n"
-                "▎互通管理（管理员）\n"
-                "  /zera interop status   查看互通状态\n"
-                "  /zera interop admin    管理员ID列表\n"
-                "  /zera interop admin add <ID>   添加\n"
-                "  /zera interop admin del <ID>   移除\n"
-                "\n"
-                "▎签到管理（管理员）\n"
-                "  /zera list [页数]    签到排行榜\n"
-                "  /zera search <QQ>    查询签到详情\n"
-                "  /zera reset confirm force  重置全部\n"
-                "  /zera checkin reset confirm force  重置签到\n"
-                "\n"
-                "▎番茄管理（管理员）\n"
-                "  /zera fanqie force     强制检查更新\n"
-                "  /zera fanqie reset     清空章节缓存\n"
-                "\n"
-                "▎表情包管理（管理员）\n"
-                "  /zera bqb add +图片     添加表情包\n"
-                "  /zera bqb remove <id>   删除表情包\n"
-                "  /zera bqb modify <id> <标签>  改标签\n"
-                "  /zera bqb remake <id>   AI重新打标\n"
-                "\n"
-                "═══════════════════════════════════════\n"
-                "💡 WebUI 配置签到/番茄/表情包参数\n"
-                "💡 互通角色：自动识别 OneBot v11=主 / QQ Official=从\n"
-            ))
+            help_path = os.path.join(PLUGIN_DIR, "res", "zerasos-help.png")
+            if os.path.exists(help_path):
+                yield event.image_result(help_path)
+            else:
+                yield event.plain_result("帮助图片未找到，请联系管理员。")
             return
 
         # ── checkin / 签到（所有人可用） ──
@@ -875,7 +834,7 @@ class ZerasosPlugin(Star):
 
     # =================== Embed 发送 ===================
     @staticmethod
-    async def _send_embed(event, embed_data: dict, image_url: str = "", debug_msg: str = ""):
+    async def _send_checkin_md(event, embed_data: dict, image_url: str = "", debug_msg: str = ""):
         """通过 QQ Official Bot API 发送签到消息（Markdown 格式）。
         image_url: 顶部图片链接（来自 WebUI 配置）。
         debug_msg 非空时额外发送一条 debug 消息到聊天。"""
@@ -885,7 +844,6 @@ class ZerasosPlugin(Star):
 
         raw_data = embed_data.get("_raw", {})
         md_content = (
-            f"![签到背景#400px#300px]({image_url})\n"
             f"# 🌟 签到成功\n"
             f"> **当前信徒**：{raw_data.get('nickname', '')}\n"
             f"> **信仰跃升**：{raw_data.get('add_faith', 0)} 点\n"
@@ -893,6 +851,8 @@ class ZerasosPlugin(Star):
             f"> **连续签到**：{raw_data.get('consecutive_days', 0)} 天\n"
             f"> **总信仰值**：{raw_data.get('total_faith', 0)}\n"
             f"\n"
+            f"------\n"
+            f"![签到#400px#300px]({image_url})\n"
             f"# 继续努力，Zerasos 期待收到你的信仰力哦！"
         )
 
@@ -911,6 +871,18 @@ class ZerasosPlugin(Star):
                     msg_id=msg_id,
                     msg_seq=random.randint(1, 10000),
                 )
+
+        event.stop_event()
+
+    # =================== /help 快捷指令 ===================
+    @command("help")
+    async def help_cmd(self, event: AstrMessageEvent):
+        """快捷帮助，等价于 /zera help"""
+        help_path = os.path.join(PLUGIN_DIR, "res", "zerasos-help.png")
+        if os.path.exists(help_path):
+            yield event.image_result(help_path)
+        else:
+            yield event.plain_result("帮助图片未找到，请联系管理员。")
 
     # =================== 工具 ===================
     @staticmethod
