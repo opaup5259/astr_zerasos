@@ -224,10 +224,10 @@ class CheckinManager:
                 "url": "https://pic1.imgdb.cn/item/6a5397a24893f89183bae75f.png"
             },
             "fields": [
-                {"name": f"信仰值+{points}"},
-                {"name": f"累计签到：{user_data['total_checkins']}天"},
-                {"name": f"连续签到：{user_data['streak']}天"},
-                {"name": f"总信仰值：{user_data['faith_points']}"},
+                {"name": str(f"信仰值+{points}")},
+                {"name": str(f"累计签到：{user_data['total_checkins']}天")},
+                {"name": str(f"连续签到：{user_data['streak']}天")},
+                {"name": str(f"总信仰值：{user_data['faith_points']}")},
             ]
         }
 
