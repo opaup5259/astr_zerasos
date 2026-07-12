@@ -489,8 +489,8 @@ class ZerasosPlugin(Star):
             # 签到回复：标记互通
             if text:
                 mark_sent(umo, text, role)
-            # QQ Official 走 embed，OneBot v11 走图片
-            if role == "secondary" and result.get("embed_data"):
+            # 全部使用 QQ 官方 Bot Embed 消息
+            if result.get("embed_data"):
                 await self._send_embed(event, result["embed_data"])
             else:
                 yield self._render_result(event, result)
@@ -508,9 +508,7 @@ class ZerasosPlugin(Star):
         nickname = self.cm._nickname(event)
         result = await self.cm.process_checkin(uid, nickname, "hard")
         if result:
-            umo = getattr(event, 'unified_msg_origin', '')
-            role = detect_role(umo)
-            if role == "secondary" and result.get("embed_data"):
+            if result.get("embed_data"):
                 await self._send_embed(event, result["embed_data"])
             else:
                 yield self._render_result(event, result)
