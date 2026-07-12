@@ -52,7 +52,7 @@ from interop import (
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+互通+骰子+番茄+表情包", "2.0202")
+@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+互通+骰子+番茄+表情包", "2.0203")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
@@ -189,6 +189,11 @@ class ZerasosPlugin(Star):
     @plugin_filter.event_message_type(EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):
         text = event.message_str.strip()
+
+        # 指令类消息由 @filter.command 处理，此处跳过避免重复触发 LLM
+        if text.startswith("/zera") or text.startswith("/checkin"):
+            return
+
         umo = getattr(event, 'unified_msg_origin', '')
         has_images = bool(self.bqb._extract_images(event))
 
@@ -880,7 +885,7 @@ class ZerasosPlugin(Star):
 
         raw_data = embed_data.get("_raw", {})
         md_content = (
-            f"<img src=\"{image_url}\" width=\"400\" />\n"
+            f"![签到背景#400px#300px]({image_url})\n"
             f"# 🌟 签到成功\n"
             f"> **当前信徒**：{raw_data.get('nickname', '')}\n"
             f"> **信仰跃升**：{raw_data.get('add_faith', 0)} 点\n"
