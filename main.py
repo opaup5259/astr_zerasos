@@ -86,6 +86,7 @@ class ZerasosPlugin(Star):
             debug_mode=debug_mode,
             enable_checkin=enable_checkin,
         )
+        self.image_url = str(self.config.get("image_url", "https://pic1.imgdb.cn/item/6a5397a24893f89183bae75f.png"))
 
         # ── Fanqie（共享 data_dir） ──
         self.fm = FanqieManager(
@@ -496,7 +497,7 @@ class ZerasosPlugin(Star):
             # else:
             #     yield self._render_result(event, result)
             debug_msg = self.cm.debug_result() if self.cm.debug_mode else ""
-            await self._send_embed(event, result.get("embed_data", {}), debug_msg=debug_msg)
+            await self._send_embed(event, result.get("embed_data", {}), self.image_url, debug_msg=debug_msg)
 
     # =================== 指令代理 ===================
     @command("checkin")
@@ -513,7 +514,7 @@ class ZerasosPlugin(Star):
         if result:
             debug_msg = self.cm.debug_result() if self.cm.debug_mode else ""
             if result.get("embed_data"):
-                await self._send_embed(event, result["embed_data"], debug_msg=debug_msg)
+                await self._send_embed(event, result["embed_data"], self.image_url, debug_msg=debug_msg)
             else:
                 yield self._render_result(event, result)
 
@@ -869,20 +870,26 @@ class ZerasosPlugin(Star):
 
     # =================== Embed 发送 ===================
     @staticmethod
-    async def _send_embed(event, embed_data: dict, debug_msg: str = ""):
-        """通过 QQ Official Bot API 发送签到消息（Markdown 格式，embed API群聊渲染不佳）。
+    async def _send_embed(event, embed_data: dict, image_url: str = "", debug_msg: str = ""):
+        """通过 QQ Official Bot API 发送签到消息（Markdown 格式）。
+        image_url: 顶部图片链接（来自 WebUI 配置）。
         debug_msg 非空时额外发送一条 debug 消息到聊天。"""
         import random
         raw = event.message_obj.raw_message
         msg_id = event.message_obj.message_id
 
-        # 将 embed 数据格式化为 Markdown
-        title = embed_data.get("title", "签到")
-        fields = embed_data.get("fields", [])
-        md_lines = [f"## {title}"]
-        for f in fields:
-            md_lines.append(f"- {f.get('name', '')}")
-        md_content = "\n".join(md_lines)
+        raw_data = embed_data.get("_raw", {})
+        md_content = (
+            f"![图]({image_url})\n"
+            f"# 🌟 签到成功\n"
+            f"> **当前信徒**：{raw_data.get('nickname', '')}\n"
+            f"> **信仰跃升**：{raw_data.get('add_faith', 0)} 点\n"
+            f"> **累计签到**：{raw_data.get('total_days', 0)} 天\n"
+            f"> **连续签到**：{raw_data.get('consecutive_days', 0)} 天\n"
+            f"> **总信仰值**：{raw_data.get('total_faith', 0)}\n"
+            f"\n"
+            f"# 继续努力，Zerasos 期待收到你的信仰力哦！"
+        )
 
         if hasattr(raw, "group_openid") and raw.group_openid:
             await event.bot.api.post_group_message(

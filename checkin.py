@@ -216,7 +216,7 @@ class CheckinManager:
     # ── Embed 数据生成 ─────────────────────────────
     @staticmethod
     def _generate_embed_data(nickname: str, user_data: dict, points: int) -> dict:
-        """生成 QQ Official Bot Embed 消息数据结构。"""
+        """生成签到消息数据（含 raw 数值供 markdown 模板使用）。"""
         return {
             "title": f"签到 -> {nickname}",
             "prompt": "签到消息",
@@ -228,7 +228,14 @@ class CheckinManager:
                 {"name": str(f"累计签到：{user_data['total_checkins']}天")},
                 {"name": str(f"连续签到：{user_data['streak']}天")},
                 {"name": str(f"总信仰值：{user_data['faith_points']}")},
-            ]
+            ],
+            "_raw": {
+                "nickname": nickname,
+                "add_faith": points,
+                "total_days": user_data['total_checkins'],
+                "consecutive_days": user_data['streak'],
+                "total_faith": user_data['faith_points'],
+            }
         }
 
     # ── 卡片生成（描边 + 阴影） ───────────────────

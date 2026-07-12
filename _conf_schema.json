@@ -9,6 +9,13 @@
 		"description": "调试模式：输出详细日志方便排查问题",
 		"default": false
 	},
+	"image_url": {
+		"type": "string",
+		"description": "签到图片URL",
+		"hint": "签到消息顶部显示的图片链接",
+		"obvious_hint": true,
+		"default": "https://pic1.imgdb.cn/item/6a5397a24893f89183bae75f.png"
+	},
 	"admin_ids": {
 		"type": "list",
 		"description": "管理员 ID 列表（多平台）",
