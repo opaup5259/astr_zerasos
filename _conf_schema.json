@@ -12,7 +12,7 @@
 	"admin_ids": {
 		"type": "list",
 		"description": "管理员 ID 列表（多平台）",
-		"hint": "这里填所有管理员账号的 ID。OneBot v11 填 QQ 号，QQ 官方 Bot 填 openid。填写后 /zer 系列指令即可在这些账号下执行。",
+		"hint": "这里填所有管理员账号的 ID。OneBot v11 填 QQ 号，QQ 官方 Bot 填 openid。填写后 /zera 系列指令即可在这些账号下执行。",
 		"obvious_hint": true,
 		"default": []
 	},

@@ -51,7 +51,7 @@ from interop import (
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+互通+骰子+番茄+表情包", "2.0201")
+@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+互通+骰子+番茄+表情包", "2.0202")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
@@ -159,6 +159,8 @@ class ZerasosPlugin(Star):
 
     async def terminate(self):
         await self.fm.terminate()
+        await self.cm.terminate()
+        await self.bqb.terminate()
 
     # =================== 多行输出辅助（\n → <br /> 绕过AstrBot逗号过滤） ===================
     @staticmethod
@@ -487,12 +489,16 @@ class ZerasosPlugin(Star):
             # 签到回复：标记互通
             if text:
                 mark_sent(umo, text, role)
-            yield self._render_result(event, result)
+            # QQ Official 走 embed，OneBot v11 走图片
+            if role == "secondary" and result.get("embed_data"):
+                await self._send_embed(event, result["embed_data"])
+            else:
+                yield self._render_result(event, result)
 
     # =================== 指令代理 ===================
     @command("checkin")
     async def checkin_cmd(self, event: AstrMessageEvent):
-        """快捷签到，等价于 /zer checkin"""
+        """快捷签到，等价于 /zera checkin"""
         if not self.cm.enable_checkin:
             yield event.plain_result("签到功能未开启。")
             return
@@ -502,10 +508,15 @@ class ZerasosPlugin(Star):
         nickname = self.cm._nickname(event)
         result = await self.cm.process_checkin(uid, nickname, "hard")
         if result:
-            yield self._render_result(event, result)
+            umo = getattr(event, 'unified_msg_origin', '')
+            role = detect_role(umo)
+            if role == "secondary" and result.get("embed_data"):
+                await self._send_embed(event, result["embed_data"])
+            else:
+                yield self._render_result(event, result)
 
-    # =================== /zer 父指令 ===================
-    @command("zer")
+    # =================== /zera 父指令 ===================
+    @command("zera")
     async def zer_router(self, event: AstrMessageEvent):
         uid = str(event.message_obj.sender.user_id)
         text = event.message_str.strip()
@@ -522,38 +533,41 @@ class ZerasosPlugin(Star):
                 "═══════════════════════════════════════\n"
                 "\n"
                 "▎签到（所有人可用）\n"
-                "  /zer checkin     手动签到\n"
+                "  /zera checkin     手动签到\n"
                 "  /签到 /打卡       关键词自动签到\n"
                 "  早安 晚安 安安    自动签到（软触发）\n"
                 "\n"
                 "▎表情包（所有人可用）\n"
-                "  /zer bqb list [页]    浏览表情包\n"
-                "  /zer bqb get <编号>   获取表情包\n"
+                "  /zera bqb list [页]    浏览表情包\n"
+                "  /zera bqb get <编号>   获取表情包\n"
+                "\n"
+                "▎番茄小说监控\n"
+                "  /zera fanqie add       绑定本群为推送目标\n"
+                "  /zera fanqie del       移出推送列表\n"
+                "  /zera fanqie list      查看推送群聊\n"
+                "  /zera fanqie get_umo   获取群标识\n"
                 "\n"
                 "▎互通管理（管理员）\n"
-                "  /zer interop status   查看互通状态\n"
-                "  /zer interop admin    管理员ID列表\n"
-                "  /zer interop admin add <ID>   添加\n"
-                "  /zer interop admin del <ID>   移除\n"
+                "  /zera interop status   查看互通状态\n"
+                "  /zera interop admin    管理员ID列表\n"
+                "  /zera interop admin add <ID>   添加\n"
+                "  /zera interop admin del <ID>   移除\n"
                 "\n"
                 "▎签到管理（管理员）\n"
-                "  /zer list [页数]    签到排行榜\n"
-                "  /zer search <QQ>    查询签到详情\n"
-                "  /zer reset confirm force  重置全部\n"
+                "  /zera list [页数]    签到排行榜\n"
+                "  /zera search <QQ>    查询签到详情\n"
+                "  /zera reset confirm force  重置全部\n"
+                "  /zera checkin reset confirm force  重置签到\n"
+                "\n"
+                "▎番茄管理（管理员）\n"
+                "  /zera fanqie force     强制检查更新\n"
+                "  /zera fanqie reset     清空章节缓存\n"
                 "\n"
                 "▎表情包管理（管理员）\n"
-                "  /zer bqb add +图片     添加表情包\n"
-                "  /zer bqb remove <id>   删除表情包\n"
-                "  /zer bqb modify <id> <标签>  改标签\n"
-                "  /zer bqb remake <id>   AI重新打标\n"
-                "\n"
-                "▎番茄小说监控（管理员）\n"
-                "  /zer fanqie force     强制检查更新\n"
-                "  /zer fanqie add       绑定本群为推送目标\n"
-                "  /zer fanqie del       移出推送列表\n"
-                "  /zer fanqie list      查看推送群聊\n"
-                "  /zer fanqie reset     清空章节缓存\n"
-                "  /zer fanqie get_umo   获取群标识\n"
+                "  /zera bqb add +图片     添加表情包\n"
+                "  /zera bqb remove <id>   删除表情包\n"
+                "  /zera bqb modify <id> <标签>  改标签\n"
+                "  /zera bqb remake <id>   AI重新打标\n"
                 "\n"
                 "═══════════════════════════════════════\n"
                 "💡 WebUI 配置签到/番茄/表情包参数\n"
@@ -561,22 +575,20 @@ class ZerasosPlugin(Star):
             ))
             return
 
-        # ── 管理员权限检查（支持多平台 ID） ──
-        if not _is_admin:
-            yield event.plain_result("你没有权限。")
-            return
-
-        # ── checkin / 签到 ──
+        # ── checkin / 签到（所有人可用） ──
         if subcmd == "checkin":
-            # 子子指令检查：/zer checkin reset confirm force
+            # 子子指令检查：/zera checkin reset confirm force（管理员）
             if len(parts) >= 3:
                 sub2 = parts[2].lower()
                 if sub2 == "reset":
+                    if not _is_admin:
+                        yield event.plain_result("你没有权限。")
+                        return
                     if len(parts) >= 6 and parts[3] == "confirm" and parts[4] == "force":
                         await self.cm.reset_all()
                         yield event.plain_result("已重置所有签到数据和缓存图片。")
                     else:
-                        yield event.plain_result("用法: /zer checkin reset confirm force")
+                        yield event.plain_result("用法: /zera checkin reset confirm force")
                     return
             # 普通签到
             if not self.cm.enable_checkin:
@@ -591,6 +603,11 @@ class ZerasosPlugin(Star):
                 yield self._render_result(event, result)
             return
 
+        # ── 以下指令需要管理员权限 ──
+        if not _is_admin and subcmd not in ("fanqie",):
+            yield event.plain_result("你没有权限。")
+            return
+
         if subcmd == "list":
             page = int(parts[2]) if len(parts) >= 3 and parts[2].isdigit() else 1
             text = self.cm.leaderboard(page=page)
@@ -599,7 +616,7 @@ class ZerasosPlugin(Star):
 
         if subcmd == "search":
             if len(parts) < 3:
-                yield event.plain_result("用法: /zer search <QQ号>")
+                yield event.plain_result("用法: /zera search <QQ号>")
                 return
             text = self.cm.search_user(parts[2])
             yield event.plain_result(text or f"未找到 QQ {parts[2]} 的签到记录。")
@@ -607,7 +624,7 @@ class ZerasosPlugin(Star):
 
         if subcmd == "reset":
             if len(parts) < 4 or parts[-2] != "confirm" or parts[-1] != "force":
-                yield event.plain_result("用法: /zer reset confirm force")
+                yield event.plain_result("用法: /zera reset confirm force")
                 return
             await self.cm.reset_all()
             yield event.plain_result("已重置所有签到数据和缓存图片。")
@@ -618,6 +635,9 @@ class ZerasosPlugin(Star):
             fcmd = parts[2].lower()
 
             if fcmd == "force":
+                if not _is_admin:
+                    yield event.plain_result("你没有权限。")
+                    return
                 debug_msg, preview_msg = await self.fm.do_check_and_notify(is_debug=True)
                 if debug_msg:
                     for r in self._yield_lines(event, debug_msg):
@@ -647,12 +667,15 @@ class ZerasosPlugin(Star):
             elif fcmd == "list":
                 groups = self.fm.data.get("target_groups", [])
                 if not groups:
-                    yield event.plain_result(self._br_text("推送列表为空。\n💡 在目标群发送 /zer fanqie add 即可绑定"))
+                    yield event.plain_result(self._br_text("推送列表为空。\n💡 在目标群发送 /zera fanqie add 即可绑定"))
                 else:
                     res = "当前推送群聊:\n" + "\n".join(f"- {g}" for g in groups)
                     yield event.plain_result(self._br_text(res))
 
             elif fcmd == "reset":
+                if not _is_admin:
+                    yield event.plain_result("你没有权限。")
+                    return
                 self.fm.data["chapter_states"] = {}
                 self.fm.data["chapter_history"] = {}
                 await self.fm._save_data()
@@ -661,23 +684,23 @@ class ZerasosPlugin(Star):
             elif fcmd == "get_umo":
                 yield event.plain_result(self._br_text(
                     f"✅ 当前底层标识 (UMO):\n{event.unified_msg_origin}\n\n"
-                    f"💡 用 /zer fanqie add 绑定即可 100% 投递"
+                    f"💡 用 /zera fanqie add 绑定即可 100% 投递"
                 ))
 
             else:
-                yield event.plain_result("用法: /zer fanqie <force|add|del|list|reset|get_umo>")
+                yield event.plain_result("用法: /zera fanqie <force|add|del|list|reset|get_umo>")
             return
 
         # ── interop 互通管理 ──
         if subcmd == "interop":
             if len(parts) < 3:
                 yield event.plain_result(self._br_text(
-                    "  /zer interop status     互通状态\n"
-                    "  /zer interop admin      管理员ID\n"
-                    "  /zer interop admin add/del <ID>  添加/移除\n"
-                    "  /zer interop bindings   查看用户绑定\n"
-                    "  /zer interop bind <openid> <QQ>   强制绑定\n"
-                    "  /zer interop unbind <openid>      解除绑定"
+                    "  /zera interop status     互通状态\n"
+                    "  /zera interop admin      管理员ID\n"
+                    "  /zera interop admin add/del <ID>  添加/移除\n"
+                    "  /zera interop bindings   查看用户绑定\n"
+                    "  /zera interop bind <openid> <QQ>   强制绑定\n"
+                    "  /zera interop unbind <openid>      解除绑定"
                 ))
                 return
 
@@ -700,7 +723,7 @@ class ZerasosPlugin(Star):
                         else:
                             yield event.plain_result(f"❌ 未找到 {target_id}")
                     else:
-                        yield event.plain_result("用法: /zer interop admin <add|del> <ID>")
+                        yield event.plain_result("用法: /zera interop admin <add|del> <ID>")
                 else:
                     yield event.plain_result(self._br_text(
                         f"管理员ID列表 ({len(admins)}人):\n"
@@ -708,7 +731,7 @@ class ZerasosPlugin(Star):
                     ))
 
             elif icmd == "bind":
-                # /zer interop bind <openid> <QQ号>
+                # /zera interop bind <openid> <QQ号>
                 if len(parts) >= 5:
                     oid = parts[3]
                     qq = parts[4]
@@ -717,10 +740,10 @@ class ZerasosPlugin(Star):
                     else:
                         yield event.plain_result(f"❌ 绑定失败")
                 else:
-                    yield event.plain_result("用法: /zer interop bind <openid> <QQ号>")
+                    yield event.plain_result("用法: /zera interop bind <openid> <QQ号>")
 
             elif icmd == "unbind":
-                # /zer interop unbind <openid>
+                # /zera interop unbind <openid>
                 if len(parts) >= 4:
                     oid = parts[3]
                     if unbind_user_id(oid):
@@ -728,7 +751,7 @@ class ZerasosPlugin(Star):
                     else:
                         yield event.plain_result(f"❌ 未找到绑定记录")
                 else:
-                    yield event.plain_result("用法: /zer interop unbind <openid>")
+                    yield event.plain_result("用法: /zera interop unbind <openid>")
 
             elif icmd == "bindings":
                 bindings = get_all_bindings()
@@ -739,12 +762,12 @@ class ZerasosPlugin(Star):
                     for oid, qq in bindings.items():
                         lines.append(f"  {oid[:24]}... → {qq}")
                     yield event.plain_result(self._br_text("用法:\n"
-                        "/zer interop status     互通状态\n"
-                        "/zer interop admin      管理员ID\n"
-                        "/zer interop admin add/del <ID>  添加/移除\n"
-                        "/zer interop bindings   查看用户绑定\n"
-                        "/zer interop bind <openid> <QQ>   强制绑定\n"
-                        "/zer interop unbind <openid>      解除绑定"))
+                        "/zera interop status     互通状态\n"
+                        "/zera interop admin      管理员ID\n"
+                        "/zera interop admin add/del <ID>  添加/移除\n"
+                        "/zera interop bindings   查看用户绑定\n"
+                        "/zera interop bind <openid> <QQ>   强制绑定\n"
+                        "/zera interop unbind <openid>      解除绑定"))
             elif icmd == "status":
                 from interop import _SHARED_STATE
                 pending = len(_SHARED_STATE.get("processing_locks", {}))
@@ -778,7 +801,7 @@ class ZerasosPlugin(Star):
 
             elif bcmd == "remove":
                 if len(parts) < 4 or not parts[3].isdigit():
-                    yield event.plain_result("用法: /zer bqb remove <id>")
+                    yield event.plain_result("用法: /zera bqb remove <id>")
                     return
                 num = int(parts[3])
                 if self.bqb.remove_bqb(num):
@@ -788,7 +811,7 @@ class ZerasosPlugin(Star):
 
             elif bcmd == "get":
                 if len(parts) < 4 or not parts[3].isdigit():
-                    yield event.plain_result("用法: /zer bqb get <id>")
+                    yield event.plain_result("用法: /zera bqb get <id>")
                     return
                 num = int(parts[3])
                 path = self.bqb.get_bqb_path(num)
@@ -801,7 +824,7 @@ class ZerasosPlugin(Star):
                 # 从消息中提取图片
                 urls = self.bqb._extract_images(event)
                 if not urls:
-                    yield event.plain_result("请同时发送图片。用法: 发送带图消息 + /zer bqb add")
+                    yield event.plain_result("请同时发送图片。用法: 发送带图消息 + /zera bqb add")
                     return
                 added = 0
                 for url in urls[:3]:
@@ -812,7 +835,7 @@ class ZerasosPlugin(Star):
 
             elif bcmd == "modify":
                 if len(parts) < 5 or not parts[3].isdigit():
-                    yield event.plain_result("用法: /zer bqb modify <id> <标签1,标签2,...>")
+                    yield event.plain_result("用法: /zera bqb modify <id> <标签1,标签2,...>")
                     return
                 num = int(parts[3])
                 tags_str = " ".join(parts[4:])
@@ -823,7 +846,7 @@ class ZerasosPlugin(Star):
 
             elif bcmd == "remake":
                 if len(parts) < 4 or not parts[3].isdigit():
-                    yield event.plain_result("用法: /zer bqb remake <id>")
+                    yield event.plain_result("用法: /zera bqb remake <id>")
                     return
                 num = int(parts[3])
                 yield event.plain_result(f"⏳ 正在重新分析表情包 #{num}...")
@@ -836,16 +859,35 @@ class ZerasosPlugin(Star):
                     yield event.plain_result(f"❌ 未找到表情包 #{num}")
 
             else:
-                yield event.plain_result("用法: /zer bqb <list|add|remove|get|modify|remake>")
+                yield event.plain_result("用法: /zera bqb <list|add|remove|get|modify|remake>")
             return
 
         # ── 未知子指令 ──
-        yield event.plain_result(f"未知指令 /zer {subcmd}，发送 /zer help 查看帮助")
+        yield event.plain_result(f"未知指令 /zera {subcmd}，发送 /zera help 查看帮助")
+
+    # =================== Embed 发送 ===================
+    @staticmethod
+    async def _send_embed(event, embed_data: dict):
+        """通过 QQ Official Bot API 发送 embed 消息。"""
+        raw = event.message_obj.raw_message
+        msg_id = event.message_obj.message_id
+
+        if hasattr(raw, "group_openid") and raw.group_openid:
+            await event.bot.api.post_group_message(
+                group_openid=raw.group_openid,
+                embed=embed_data,
+                msg_id=msg_id,
+            )
+        elif hasattr(raw, "author") and hasattr(raw.author, "user_openid"):
+            await event.post_c2c_message(
+                openid=raw.author.user_openid,
+                embed=embed_data,
+            )
 
     # =================== 工具 ===================
     @staticmethod
     def _render_result(event, result: dict):
-        """将 checkin manager 返回的 result dict 转为 AstrBot 响应。"""
+        """将 checkin manager 返回的 result dict 转为 AstrBot 响应（非 embed 路径）。"""
         if result["type"] == "image":
             return event.image_result(result["path"])
         return event.plain_result(result["message"])

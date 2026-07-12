@@ -51,6 +51,10 @@ class CheckinManager:
         self._font_path = font_path
         self._debug_buf: list[str] = []
 
+    async def terminate(self):
+        """插件关闭时调用，用于清理后台任务等。"""
+        pass
+
     # ── 配置更新 ──────────────────────────────────
     def update_config(self, *, enable_checkin: bool, debug_mode: bool):
         self.enable_checkin = enable_checkin
@@ -168,9 +172,10 @@ class CheckinManager:
         if already:
             if trigger_type == "soft":
                 return None
+            embed_data = self._generate_embed_data(nickname, user_data, user_data.get("today_points", 0))
             cached_path = self._read_cached_card(uid)
             if cached_path:
-                return {"type": "image", "path": cached_path}
+                return {"type": "image", "path": cached_path, "embed_data": embed_data}
             return None
 
         points = random.randint(1, 10)
@@ -191,19 +196,40 @@ class CheckinManager:
 
         await self._save_data()
 
+        embed_data = self._generate_embed_data(nickname, user_data, points)
+
         user_data["nickname"] = nickname
         card_path = await self._generate_card(uid, nickname, user_data)
         if card_path:
             if self.debug_mode:
                 self._dlog(f"图片已生成: {card_path}")
-            return {"type": "image", "path": card_path}
+            return {"type": "image", "path": card_path, "embed_data": embed_data}
         else:
             if self.debug_mode:
                 self._dlog("图片生成失败，降级文字")
             return {
                 "type": "text",
                 "message": f"签到成功！信仰值 +{points}，累计签到 {user_data['total_checkins']} 天",
+                "embed_data": embed_data,
             }
+
+    # ── Embed 数据生成 ─────────────────────────────
+    @staticmethod
+    def _generate_embed_data(nickname: str, user_data: dict, points: int) -> dict:
+        """生成 QQ Official Bot Embed 消息数据结构。"""
+        return {
+            "title": f"签到 -> {nickname}",
+            "prompt": "签到消息",
+            "thumbnail": {
+                "url": "https://pic1.imgdb.cn/item/6a5397a24893f89183bae75f.png"
+            },
+            "fields": [
+                {"name": f"信仰值+{points}"},
+                {"name": f"累计签到：{user_data['total_checkins']}天"},
+                {"name": f"连续签到：{user_data['streak']}天"},
+                {"name": f"总信仰值：{user_data['faith_points']}"},
+            ]
+        }
 
     # ── 卡片生成（描边 + 阴影） ───────────────────
     def _read_cached_card(self, uid: str) -> Optional[str]:

@@ -37,6 +37,10 @@ class BqbManager:
 
         self._send_cd: dict[str, float] = {}  # group_umo -> last_send_time
 
+    async def terminate(self):
+        """插件关闭时调用，用于清理后台任务等。"""
+        pass
+
     # ── 持久化 ──────────────────────────────────
     def _load_index(self) -> list[dict]:
         if os.path.exists(self.index_file):

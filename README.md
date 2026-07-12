@@ -9,7 +9,7 @@
 |------|------|
 | **自动偷取** | 看到好图→AI 视觉打标签→自动保存到表情包库 |
 | **概率发送** | 日常闲聊时根据情绪/场景标签匹配，随机发送 |
-| **手动管理** | `/zer bqb list/add/remove/get` 管理表情包库 |
+| **手动管理** | `/zera bqb list/add/remove/get` 管理表情包库 |
 | **独立开关** | 偷取和发送功能可分别启停 |
 
 ### 📅 每日签到
@@ -20,6 +20,7 @@
 | **信仰值** | 每日随机 +1~10 点 |
 | **数据持久** | 按 QQ 号存储，同一用户不同群数据同步 |
 | **图片卡片** | 圆形头像 + ARHei 字体 `@昵称` / `信仰值+N` / 累计天数 / 连续天数，白色描边+黑色阴影 |
+| **Embed 消息** | QQ 官方 Bot 平台自动使用 Embed 消息格式显示签到卡片 |
 
 ### 📖 番茄小说更新监控
 | 功能 | 说明 |
@@ -55,37 +56,43 @@ apt install fonts-noto-cjk
 | 指令 | 说明 |
 |------|------|
 | `/签到` `/打卡` | 手动签到（硬触发） |
-| `/checkin` | 签到快捷指令（等价于 `/zer checkin`） |
+| `/checkin` | 签到快捷指令（等价于 `/zera checkin`） |
 | `早安` `安安` `晚安` `早` `安` | 软触发签到 |
+| `/zera checkin` | 手动签到 |
+| `/zera bqb list [页]` | 查看表情包列表 |
+| `/zera bqb get <id>` | 获取指定表情包 |
+| `/zera fanqie add` | 在目标群发送，绑定本群为推送目标 |
+| `/zera fanqie del` | 移出推送列表 |
+| `/zera fanqie list` | 查看已绑定群聊 |
+| `/zera fanqie get_umo` | 获取当前群底层标识 |
 
-### 管理指令（需 WebUI 配置 admin_qq）
-
-| 指令 | 说明 |
-|------|------|
-| `/zer help` | 查看帮助 |
-| `/zer checkin` | 手动签到 |
-| `/zer list [页数]` | 签到排行榜 |
-| `/zer search <QQ号>` | 查询指定用户签到详情 |
-| `/zer reset confirm force` | 重置所有签到数据 |
-| `/zer bqb list [页]` | 查看表情包列表 |
-| `/zer bqb get <id>` | 获取指定表情包 |
-| `/zer bqb remove <id>` | 删除表情包 |
-| `/zer bqb add` + 图片 | 手动添加表情包 |
-| `/zer fanqie force` | 强制检查番茄小说更新并播报 |
-| `/zer fanqie add` | 在目标群发送，绑定推送 |
-| `/zer fanqie del` | 移出推送列表 |
-| `/zer fanqie list` | 查看已绑定群聊 |
-| `/zer fanqie reset` | 清空章节缓存 |
-| `/zer fanqie get_umo` | 获取当前群底层标识 |
-
-### 互通管理指令（需 WebUI 配置 admin_ids）
+### 管理指令（需配置 admin_ids）
 
 | 指令 | 说明 |
 |------|------|
-| `/zer interop status` | 查看互通去重状态 |
-| `/zer interop admin` | 查看管理员 ID 列表 |
-| `/zer interop admin add <ID>` | 添加管理员 ID |
-| `/zer interop admin del <ID>` | 移除管理员 ID |
+| `/zera help` | 查看帮助 |
+| `/zera list [页数]` | 签到排行榜 |
+| `/zera search <QQ号>` | 查询指定用户签到详情 |
+| `/zera reset confirm force` | 重置所有签到数据 |
+| `/zera checkin reset confirm force` | 重置签到数据 |
+| `/zera bqb add` + 图片 | 手动添加表情包 |
+| `/zera bqb remove <id>` | 删除表情包 |
+| `/zera bqb modify <id> <标签>` | 修改表情包标签 |
+| `/zera bqb remake <id>` | AI 重新打标 |
+| `/zera fanqie force` | 强制检查番茄小说更新并播报 |
+| `/zera fanqie reset` | 清空章节缓存 |
+
+### 互通管理指令（需配置 admin_ids）
+
+| 指令 | 说明 |
+|------|------|
+| `/zera interop status` | 查看互通去重状态 |
+| `/zera interop admin` | 查看管理员 ID 列表 |
+| `/zera interop admin add <ID>` | 添加管理员 ID |
+| `/zera interop admin del <ID>` | 移除管理员 ID |
+| `/zera interop bind <openid> <QQ>` | 强制绑定用户 |
+| `/zera interop unbind <openid>` | 解除用户绑定 |
+| `/zera interop bindings` | 查看所有绑定记录 |
 
 ## ⚙️ WebUI 配置
 
@@ -93,7 +100,7 @@ apt install fonts-noto-cjk
 |--------|------|
 | `enable_checkin` | 签到功能开关 |
 | `debug_mode` | 签到调试日志 |
-| `admin_qq` | 管理员 QQ 号 |
+| `admin_ids` | 管理员 ID 列表（多平台） |
 | `enable_bqb_send` | 自动发表情包 |
 | `enable_bqb_steal` | 自动偷表情包 |
 | `bqb_provider_id` | 表情包标签分析模型 |

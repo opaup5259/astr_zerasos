@@ -172,7 +172,7 @@ class FanqieManager:
                 "novel_cover_url": novel_cover_url,
                 "novel_abstract": novel_abstract,
                 "chapter_link": chapter_info["full_url"],
-                "novel_link": f"{BASE_URL}/novel/{novel_id}",
+                "novel_link": f"{BASE_URL}/page/{novel_id}",
             }
 
             if novel_id not in self.data["chapter_history"]:
@@ -389,7 +389,7 @@ class FanqieManager:
         """构建 QQ Official Bot 的原生 Markdown Content 字符串"""
         novel_title = chapter_state.get("novel_title", "")
         chapter_title = chapter_state.get("chapter_title", "")
-        novel_link = chapter_state.get("novel_link", f"{BASE_URL}/novel/{novel_id}")
+        novel_link = chapter_state.get("novel_link", f"{BASE_URL}/page/{novel_id}")
         chapter_link = chapter_state.get("chapter_link", "")
         content = chapter_state.get("content", "")
         novel_cover_url = chapter_state.get("novel_cover_url", "")
