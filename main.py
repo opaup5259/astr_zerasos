@@ -870,40 +870,27 @@ class ZerasosPlugin(Star):
     # =================== Embed 发送 ===================
     @staticmethod
     async def _send_embed(event, embed_data: dict, debug_msg: str = ""):
-        """通过 QQ Official Bot API 发送 embed 消息。
+        """通过 QQ Official Bot API 发送签到消息（Markdown 格式，embed API群聊渲染不佳）。
         debug_msg 非空时额外发送一条 debug 消息到聊天。"""
         import random
-        import json
         raw = event.message_obj.raw_message
         msg_id = event.message_obj.message_id
 
+        # 将 embed 数据格式化为 Markdown
+        title = embed_data.get("title", "签到")
+        fields = embed_data.get("fields", [])
+        md_lines = [f"## {title}"]
+        for f in fields:
+            md_lines.append(f"- {f.get('name', '')}")
+        md_content = "\n".join(md_lines)
+
         if hasattr(raw, "group_openid") and raw.group_openid:
-            # 先发 debug：打印实际发送的 embed 数据
-            debug_info = f"[Embed数据] {json.dumps(embed_data, ensure_ascii=False)}"
             await event.bot.api.post_group_message(
                 group_openid=raw.group_openid,
-                content=debug_info,
+                markdown={"content": md_content},
                 msg_id=msg_id,
                 msg_seq=random.randint(1, 10000),
             )
-
-            try:
-                await event.bot.api.post_group_message(
-                    group_openid=raw.group_openid,
-                    embed=embed_data,
-                    msg_type=4,
-                    msg_id=msg_id,
-                    msg_seq=random.randint(1, 10000),
-                )
-            except Exception as e:
-                err_msg = f"[Embed错误] {e}"
-                await event.bot.api.post_group_message(
-                    group_openid=raw.group_openid,
-                    content=err_msg,
-                    msg_id=msg_id,
-                    msg_seq=random.randint(1, 10000),
-                )
-
             if debug_msg:
                 await event.bot.api.post_group_message(
                     group_openid=raw.group_openid,
