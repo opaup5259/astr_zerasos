@@ -17,7 +17,7 @@ from astrbot.api.all import *
 from astrbot.api.event import filter as plugin_filter
 from astrbot.api.event.filter import EventMessageType
 from astrbot.api.star import StarTools
-from botpy.message import Embed, EmbedField, EmbedThumbnail
+# from botpy.message import Embed, EmbedField, EmbedThumbnail # <--- 移除错误的导入
 
 importlib.invalidate_caches()
 
