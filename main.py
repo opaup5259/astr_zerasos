@@ -495,7 +495,8 @@ class ZerasosPlugin(Star):
             #     await self._send_embed(event, result["embed_data"])
             # else:
             #     yield self._render_result(event, result)
-            yield self._send_embed(event, result)
+            debug_msg = self.cm.debug_result() if self.cm.debug_mode else ""
+            await self._send_embed(event, result.get("embed_data", {}), debug_msg=debug_msg)
 
     # =================== 指令代理 ===================
     @command("checkin")
@@ -510,8 +511,9 @@ class ZerasosPlugin(Star):
         nickname = self.cm._nickname(event)
         result = await self.cm.process_checkin(uid, nickname, "hard")
         if result:
+            debug_msg = self.cm.debug_result() if self.cm.debug_mode else ""
             if result.get("embed_data"):
-                await self._send_embed(event, result["embed_data"])
+                await self._send_embed(event, result["embed_data"], debug_msg=debug_msg)
             else:
                 yield self._render_result(event, result)
 
@@ -867,8 +869,9 @@ class ZerasosPlugin(Star):
 
     # =================== Embed 发送 ===================
     @staticmethod
-    async def _send_embed(event, embed_data: dict):
-        """通过 QQ Official Bot API 发送 embed 消息。"""
+    async def _send_embed(event, embed_data: dict, debug_msg: str = ""):
+        """通过 QQ Official Bot API 发送 embed 消息。
+        debug_msg 非空时额外发送一条 debug 消息到聊天。"""
         raw = event.message_obj.raw_message
         msg_id = event.message_obj.message_id
 
@@ -890,11 +893,12 @@ class ZerasosPlugin(Star):
                 msg_type= 4,
                 msg_id=msg_id,
             )
-        # elif hasattr(raw, "author") and hasattr(raw.author, "user_openid"):
-        #     await event.post_c2c_message(
-        #         openid=raw.author.user_openid,
-        #         embed=embed,
-        #     )
+            if debug_msg:
+                await event.bot.api.post_group_message(
+                    group_openid=raw.group_openid,
+                    content=debug_msg,
+                    msg_id=msg_id,
+                )
 
     # =================== 工具 ===================
     @staticmethod
