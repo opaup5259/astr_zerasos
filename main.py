@@ -890,13 +890,14 @@ class ZerasosPlugin(Star):
             await event.bot.api.post_group_message(
                 group_openid=raw.group_openid,
                 content={"embed": embed_data},
-                msg_type= 4,
+                msg_type = 4,
                 msg_id=msg_id,
             )
             if debug_msg:
                 await event.bot.api.post_group_message(
                     group_openid=raw.group_openid,
-                    content=debug_msg,
+                    content={"embed": embed_data},
+                    msg_type = 4,
                     msg_id=msg_id,
                 )
 
