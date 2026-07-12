@@ -488,13 +488,14 @@ class ZerasosPlugin(Star):
         result = await self.cm.process_checkin(uid, nickname, trigger_type)
         if result:
             # 签到回复：标记互通
-            if text:
-                mark_sent(umo, text, role)
+            # if text:
+            #     mark_sent(umo, text, role)
             # 全部使用 QQ 官方 Bot Embed 消息
-            if result.get("embed_data"):
-                await self._send_embed(event, result["embed_data"])
-            else:
-                yield self._render_result(event, result)
+            # if result.get("embed_data"):
+            #     await self._send_embed(event, result["embed_data"])
+            # else:
+            #     yield self._render_result(event, result)
+            yield self._send_embed(result)
 
     # =================== 指令代理 ===================
     @command("checkin")
@@ -872,24 +873,27 @@ class ZerasosPlugin(Star):
         msg_id = event.message_obj.message_id
 
         # 手动构建 Embed 对象
-        embed = Embed(
-            title=embed_data.get("title"),
-            prompt=embed_data.get("prompt"),
-            thumbnail=EmbedThumbnail(url=embed_data.get("thumbnail", {}).get("url")),
-            fields=[EmbedField(name=f.get("name")) for f in embed_data.get("fields", [])],
-        )
+
+        # embed = {
+        #     "embed":{
+        #         "title": embed_data.get("title"),
+        #         "prompt": embed_data.get("prompt"),
+        #         "thumbnail": embed_data.get("thumbnail", {}).get("url"),
+        #         "fields": [EmbedField(name=f.get("name")) for f in embed_data.get("fields", [])],
+        #     }
+        # }
 
         if hasattr(raw, "group_openid") and raw.group_openid:
             await event.bot.api.post_group_message(
                 group_openid=raw.group_openid,
-                embed=embed,
+                embed=embed_data,
                 msg_id=msg_id,
             )
-        elif hasattr(raw, "author") and hasattr(raw.author, "user_openid"):
-            await event.post_c2c_message(
-                openid=raw.author.user_openid,
-                embed=embed,
-            )
+        # elif hasattr(raw, "author") and hasattr(raw.author, "user_openid"):
+        #     await event.post_c2c_message(
+        #         openid=raw.author.user_openid,
+        #         embed=embed,
+        #     )
 
     # =================== 工具 ===================
     @staticmethod
