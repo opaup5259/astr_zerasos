@@ -880,7 +880,7 @@ class ZerasosPlugin(Star):
 
         raw_data = embed_data.get("_raw", {})
         md_content = (
-            f"![图]({image_url})\n"
+            f"<img src=\"{image_url}\" width=\"400\" />\n"
             f"# 🌟 签到成功\n"
             f"> **当前信徒**：{raw_data.get('nickname', '')}\n"
             f"> **信仰跃升**：{raw_data.get('add_faith', 0)} 点\n"
