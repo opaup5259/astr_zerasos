@@ -188,7 +188,9 @@ class ZerasosPlugin(Star):
     # =================== on_message（互通+签到+表情包） ===================
     @plugin_filter.event_message_type(EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):
-        text = event.message_str.strip()
+        # 先剥离 QQ Official Bot 的 @ 前缀（如 [At:qq_official]），使后续 .coc/.r 等能正确匹配
+        raw_text = event.message_str.strip()
+        text = re.sub(r"^\[At:\S+\]\s*", "", raw_text).strip()
 
         # 指令类消息由 @command 处理，此处跳过避免重复触发 LLM
         if text.startswith("/zera") or text.startswith("/checkin") or text.startswith("/help"):

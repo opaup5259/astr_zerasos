@@ -7,6 +7,9 @@
 - 新增 `/help` 指令，等价于 `/zera help`
 - `/zera help` 及 `/help` 改为发送图片 `res/zerasos-help.png`，不再使用纯文字
 
+### 修复
+- 修复 QQ Official Bot 群聊中 `.coc`/`.r` 等指令失效：@ 前缀 `[At:qq_official]` 使 `text[0]` 变为 `[` 而非 `.`，骰子段无法匹配。现提前剥离 @ 前缀再解析
+
 ## 2.0202 (2026-07-13)
 ### 变更
 - 所有指令父前缀从 `/zer` 改为 `/zera`（修正早期命名错误）
