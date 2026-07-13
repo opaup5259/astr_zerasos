@@ -288,7 +288,7 @@ class ZerasosPlugin(Star):
                 yield event.plain_result(reply)
                 return
 
-            # ── .coc / 。coc — COC7th 角色卡（分批发送，QQ官方Markdown模板） ──
+            # ── .coc / 。coc — COC7th 角色卡 ──
             cm = re.match(r"^coc(\d*)$", lower)
             if cm:
                 num_str = cm.group(1)
@@ -303,78 +303,8 @@ class ZerasosPlugin(Star):
                     return
 
                 username = event.get_sender_name()
-
-                for batch_idx in range(batch_count):
-                    cards = [format_coc_char(roll_coc7th()) for _ in range(3)]
-
-                    lines = []
-                    for c in cards:
-                        parts = c.split("\n")
-                        for p in parts[:3]:
-                            lines.append(p.strip())
-                    while len(lines) < 9:
-                        lines.append(" ")
-
-                    md_content = (
-                        f"### 🎲 {username}的属性生成结果\n"
-                        f"| 序号 | 属性 |\n"
-                        f"| :--- | :--- |\n"
-                        f"| **1** | {lines[0]}<br/>{lines[1]}<br/>{lines[2]} |\n"
-                        f"| **2** | {lines[3]}<br/>{lines[4]}<br/>{lines[5]} |\n"
-                        f"| **3** | {lines[6]}<br/>{lines[7]}<br/>{lines[8]} |"
-                    )
-                    
-                    keyboard_content = {
-                        "rows": [
-                            {
-                                "buttons": [
-                                    {
-                                        "id": "btn1",
-                                        "render_data": {"label": "生成一次", "style": 1},
-                                        "action": {"type": 2, "permission": {"type": 2}, "data": ".coc", "enter": True}
-                                    },
-                                    {
-                                        "id": "btn2",
-                                        "render_data": {"label": "生成三次", "style": 1},
-                                        "action": {"type": 2, "permission": {"type": 2}, "data": ".coc3", "enter": True}
-                                    },
-                                    {
-                                        "id": "btn3",
-                                        "render_data": {"label": "生成五次", "style": 1},
-                                        "action": {"type": 2, "permission": {"type": 2}, "data": ".coc5", "enter": True}
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                    
-                    raw = event.message_obj.raw_message
-                    msg_id = event.message_obj.message_id
-
-                    body = {
-                        "markdown": {"content": md_content},
-                        "keyboard": {"content": keyboard_content},
-                        "msg_type": 2,
-                        "msg_id": msg_id,
-                        "msg_seq": random.randint(1, 10000),
-                    }
-
-                    if hasattr(raw, "group_openid") and raw.group_openid:
-                        await event.bot.api.post_group_message(
-                            group_openid=raw.group_openid,
-                            **body,
-                        )
-                    elif hasattr(raw, "author") and hasattr(raw.author, "user_openid"):
-                        await event.post_c2c_message(
-                            openid=raw.author.user_openid,
-                            **body,
-                        )
-                    else:
-                        yield event.plain_result(md_content)
-
-                    if batch_idx < batch_count - 1:
-                        import asyncio
-                        await asyncio.sleep(1)
+                async for r in self._coc_send(event, username, batch_count):
+                    yield r
                 return
 
             # ── .dnd / 。dnd / /dnd — DND 5e 角色卡（严格匹配） ──
@@ -885,6 +815,207 @@ class ZerasosPlugin(Star):
             yield event.image_result(help_path)
         else:
             yield event.plain_result("帮助图片未找到，请联系管理员。")
+
+    # =================== COC 角色卡生成（骰子命令 @command 路由） ===================
+    async def _coc_send(self, event, username: str, batch_count: int):
+        """发送 COC7th 角色卡（支持 QQ Official Markdown + Keyboard 和文本兜底）"""
+        for batch_idx in range(batch_count):
+            cards = [format_coc_char(roll_coc7th()) for _ in range(3)]
+
+            lines = []
+            for c in cards:
+                parts_ = c.split("\n")
+                for p in parts_[:3]:
+                    lines.append(p.strip())
+            while len(lines) < 9:
+                lines.append(" ")
+
+            md_content = (
+                f"### 🎲 {username}的属性生成结果\n"
+                f"| 序号 | 属性 |\n"
+                f"| :--- | :--- |\n"
+                f"| **1** | {lines[0]}<br/>{lines[1]}<br/>{lines[2]} |\n"
+                f"| **2** | {lines[3]}<br/>{lines[4]}<br/>{lines[5]} |\n"
+                f"| **3** | {lines[6]}<br/>{lines[7]}<br/>{lines[8]} |"
+            )
+
+            keyboard_content = {
+                "rows": [
+                    {
+                        "buttons": [
+                            {
+                                "id": "btn1",
+                                "render_data": {"label": "生成一次", "style": 1},
+                                "action": {"type": 2, "permission": {"type": 2}, "data": ".coc", "enter": True}
+                            },
+                            {
+                                "id": "btn2",
+                                "render_data": {"label": "生成三次", "style": 1},
+                                "action": {"type": 2, "permission": {"type": 2}, "data": ".coc3", "enter": True}
+                            },
+                            {
+                                "id": "btn3",
+                                "render_data": {"label": "生成五次", "style": 1},
+                                "action": {"type": 2, "permission": {"type": 2}, "data": ".coc5", "enter": True}
+                            }
+                        ]
+                    }
+                ]
+            }
+
+            raw = event.message_obj.raw_message
+            msg_id = event.message_obj.message_id
+
+            body = {
+                "markdown": {"content": md_content},
+                "keyboard": {"content": keyboard_content},
+                "msg_type": 2,
+                "msg_id": msg_id,
+                "msg_seq": random.randint(1, 10000),
+            }
+
+            if hasattr(raw, "group_openid") and raw.group_openid:
+                await event.bot.api.post_group_message(
+                    group_openid=raw.group_openid,
+                    **body,
+                )
+            elif hasattr(raw, "author") and hasattr(raw.author, "user_openid"):
+                await event.post_c2c_message(
+                    openid=raw.author.user_openid,
+                    **body,
+                )
+            else:
+                yield event.plain_result(md_content)
+
+            if batch_idx < batch_count - 1:
+                import asyncio
+                await asyncio.sleep(1)
+
+    @command("coc")
+    async def coc_cmd(self, event: AstrMessageEvent):
+        """生成 1 张 COC7th 角色卡（调试版 - 只发文本）"""
+        logger.info(f"[coc_cmd] 被调用了！message_str='{event.message_str}'")
+        try:
+            yield event.plain_result("🎲 COC 命令收到！开始生成角色卡...")
+        except Exception as e:
+            logger.error(f"[coc_cmd] 异常: {e}", exc_info=True)
+
+    @command("coc3")
+    async def coc3_cmd(self, event: AstrMessageEvent):
+        """生成 3 张 COC7th 角色卡"""
+        username = event.get_sender_name()
+        async for r in self._coc_send(event, username, 3):
+            yield r
+
+    @command("coc5")
+    async def coc5_cmd(self, event: AstrMessageEvent):
+        """生成 5 张 COC7th 角色卡"""
+        username = event.get_sender_name()
+        async for r in self._coc_send(event, username, 5):
+            yield r
+
+    @command("r")
+    async def r_cmd(self, event: AstrMessageEvent):
+        """掷骰 .r / .rd"""
+        text = event.message_str.strip()
+        # 去掉 /r 或 /rd 前缀，取出表达式
+        expr = re.sub(r"^\[At:\S+\]\s*", "", text).strip()
+        expr = re.sub(r"^/r[d]?\s*", "", expr, flags=re.IGNORECASE).strip()
+
+        # 获取 user_id（从 event 取）
+        try:
+            platform_uid = str(event.message_obj.sender.user_id)
+        except Exception:
+            platform_uid = ""
+        umo = getattr(event, 'unified_msg_origin', '')
+
+        parsed = parse_dice(expr)
+        user_id = platform_uid or "_anonymous"
+        sides = parsed["sides"] if parsed else get_dice(umo, user_id)
+        count = parsed["count"] if parsed else 1
+        modifier = parsed["modifier"] if parsed else 0
+        result = self.dice_roller.roll(
+            sides=sides,
+            count=count,
+            modifier=modifier,
+            user_id=user_id,
+        )
+        reply = make_dice_reply(result, self.dice_reply_rd)
+        yield event.plain_result(reply)
+
+    @command("rd")
+    async def rd_cmd(self, event: AstrMessageEvent):
+        """掷骰（/rd 别名）"""
+        async for r in self.r_cmd(event):
+            yield r
+
+    @command("ra")
+    async def ra_cmd(self, event: AstrMessageEvent):
+        """COC 技能检定"""
+        text = event.message_str.strip()
+        clean = re.sub(r"^\[At:\S+\]\s*", "", text).strip()
+        # 去掉 /ra 前缀
+        ra_expr = re.sub(r"^/ra\s*", "", clean, flags=re.IGNORECASE).strip()
+
+        try:
+            platform_uid = str(event.message_obj.sender.user_id)
+        except Exception:
+            platform_uid = ""
+        umo = getattr(event, 'unified_msg_origin', '')
+
+        ra_parsed = parse_ra(ra_expr)
+        try:
+            ra_name = event.message_obj.sender.nickname or platform_uid[:8]
+        except Exception:
+            ra_name = platform_uid[:8] if platform_uid else ""
+        roll = self.dice_roller.roll(100, user_id=platform_uid or "_anonymous")
+        roll_val = roll["total"]
+        skill_val = ra_parsed["skill_value"]
+        judgment = judge_coc7th(roll_val, skill_val)
+        reply = format_ra_reply(
+            judgment, roll_val, skill_val,
+            ra_parsed["skill_name"], ra_name,
+            self.ra_replies,
+        )
+        yield event.plain_result(reply)
+
+    @command("dice")
+    async def dice_cmd(self, event: AstrMessageEvent):
+        """查看/设置默认骰子"""
+        text = event.message_str.strip()
+        clean = re.sub(r"^\[At:\S+\]\s*", "", text).strip()
+        # 去掉 /dice 前缀
+        args = re.sub(r"^/dice\s*", "", clean, flags=re.IGNORECASE).strip()
+
+        try:
+            platform_uid = str(event.message_obj.sender.user_id)
+        except Exception:
+            platform_uid = ""
+        umo = getattr(event, 'unified_msg_origin', '')
+
+        # /dice set <面数>
+        m = re.match(r"^set\s+(\d+)$", args, re.IGNORECASE)
+        if m:
+            val = int(m.group(1))
+            if set_dice(umo, platform_uid or "", val):
+                yield event.plain_result(f"已设置当前骰子为 D{val}")
+            else:
+                ok_vals = "/".join(str(v) for v in valid_dice_list())
+                yield event.plain_result(f"不支持的骰子，支持的骰子：{ok_vals}")
+        else:
+            current = get_dice(umo, platform_uid or "")
+            yield event.plain_result(f"当前骰子：D{current}")
+
+    @command("dnd")
+    async def dnd_cmd(self, event: AstrMessageEvent):
+        """生成 DND 5e 角色卡"""
+        text = event.message_str.strip()
+        clean = re.sub(r"^\[At:\S+\]\s*", "", text).strip()
+        count_str = re.sub(r"^/dnd\s*", "", clean, flags=re.IGNORECASE).strip()
+        count = int(count_str) if count_str.isdigit() else 1
+        count = min(count, 10)
+        cards = [format_dnd_char(roll_dnd(), i+1) for i in range(count)]
+        yield event.plain_result(self._format_card_table(cards))
 
     # =================== 工具 ===================
     @staticmethod
