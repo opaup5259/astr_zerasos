@@ -893,12 +893,12 @@ class ZerasosPlugin(Star):
 
     @command("coc")
     async def coc_cmd(self, event: AstrMessageEvent):
-        """生成 1 张 COC7th 角色卡（调试版 - 只发文本）"""
+        """生成 1 张 COC7th 角色卡"""
         logger.info(f"[coc_cmd] 被调用了！message_str='{event.message_str}'")
-        try:
-            yield event.plain_result("🎲 COC 命令收到！开始生成角色卡...")
-        except Exception as e:
-            logger.error(f"[coc_cmd] 异常: {e}", exc_info=True)
+        username = event.get_sender_name()
+        async for r in self._coc_send(event, username, 1):
+            yield r
+        event.stop_event()
 
     @command("coc3")
     async def coc3_cmd(self, event: AstrMessageEvent):
@@ -906,6 +906,7 @@ class ZerasosPlugin(Star):
         username = event.get_sender_name()
         async for r in self._coc_send(event, username, 3):
             yield r
+        event.stop_event()
 
     @command("coc5")
     async def coc5_cmd(self, event: AstrMessageEvent):
@@ -913,6 +914,7 @@ class ZerasosPlugin(Star):
         username = event.get_sender_name()
         async for r in self._coc_send(event, username, 5):
             yield r
+        event.stop_event()
 
     @command("r")
     async def r_cmd(self, event: AstrMessageEvent):
@@ -942,6 +944,7 @@ class ZerasosPlugin(Star):
         )
         reply = make_dice_reply(result, self.dice_reply_rd)
         yield event.plain_result(reply)
+        event.stop_event()
 
     @command("rd")
     async def rd_cmd(self, event: AstrMessageEvent):
@@ -978,6 +981,7 @@ class ZerasosPlugin(Star):
             self.ra_replies,
         )
         yield event.plain_result(reply)
+        event.stop_event()
 
     @command("dice")
     async def dice_cmd(self, event: AstrMessageEvent):
@@ -1005,6 +1009,7 @@ class ZerasosPlugin(Star):
         else:
             current = get_dice(umo, platform_uid or "")
             yield event.plain_result(f"当前骰子：D{current}")
+        event.stop_event()
 
     @command("dnd")
     async def dnd_cmd(self, event: AstrMessageEvent):
@@ -1016,6 +1021,7 @@ class ZerasosPlugin(Star):
         count = min(count, 10)
         cards = [format_dnd_char(roll_dnd(), i+1) for i in range(count)]
         yield event.plain_result(self._format_card_table(cards))
+        event.stop_event()
 
     # =================== 工具 ===================
     @staticmethod
