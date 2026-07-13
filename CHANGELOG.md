@@ -1,5 +1,14 @@
 # 更新日志
 
+## 2.0204 (2026-07-13)
+### 新增
+- 为 COC 骰子命令添加 `@command` 路由桥接，支持 `/coc` `/coc3` `/coc5` `/r` `/rd` `/ra` `/dice` `/dnd` 指令
+- 抽离 `_coc_send()` 方法复用 COC 发卡逻辑（QQ Official Markdown + Keyboard 和文本兜底）
+
+### 修复
+- 修复 QQ Official Bot 上骰子命令无法触发：AstrBot 适配器未将 `.` 前缀消息投递到 `on_message`，通过 `@command` 路由绕开
+- 修复 `/coc` 等指令触发后 LLM 二次响应：新增 `event.stop_event()` 阻止事件继续传播
+
 ## 2.0203 (2026-07-13)
 ### 变更
 - `on_message` 增加 `/zera` `/checkin` `/help` 提前返回，防止重复处理
