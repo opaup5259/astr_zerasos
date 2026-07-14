@@ -48,3 +48,17 @@ async def send_welcome(bot_api, group_openid: str, member_openid: str):
         logger.info(f"[欢迎] 已发送欢迎消息到群 {group_openid[:20]}")
     except Exception as e:
         logger.error(f"[欢迎] 发送欢迎消息失败: {e}")
+
+
+async def group_member_add_handler(bot_api, event_data: dict):
+    """群成员加入事件处理函数。
+    
+    QQ Official Bot GROUP_MEMBER_ADD 事件格式：
+    { "group_openid": "...", "member_openid": "...", "op_member_openid": "...", "timestamp": ... }
+    """
+    group_openid = event_data.get("group_openid")
+    member_openid = event_data.get("member_openid")
+    if not group_openid or not member_openid:
+        logger.warning(f"[欢迎] 群成员加入事件缺少必要字段: {event_data}")
+        return
+    await send_welcome(bot_api, group_openid, member_openid)
