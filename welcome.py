@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 # 硬编码图片 URL，不写在配置中
 WELCOME_IMG_URL = "https://opa-1316532755.cos.ap-guangzhou.myqcloud.com/zipai.png"
 
-def build_welcome_md(at_text: str, img_url: str) -> str:
+def build_welcome_md(at_text: str) -> str:
     return (
         f"### 唔，又来新人了。\n"
         f"\n"
@@ -31,12 +31,12 @@ def build_welcome_md(at_text: str, img_url: str) -> str:
         f"\n"
         f"拿去，这是吾作为偶像的\"营业福利\"（随便拍的）。看完了就赶紧去贡献信仰。嗯。\n"
         f"\n"
-        f"![恩赐#400px#300px]({img_url})"
+        f"![恩赐#400px#300px]({WELCOME_IMG_URL})"
     )
 
 async def send_welcome(bot_api, group_openid: str, member_openid: str):
     at_text = f"<@!{member_openid}>"
-    md_content = build_welcome_md(at_text, WELCOME_IMG_URL)
+    md_content = build_welcome_md(at_text)
     msg_seq = random.randint(1, 10000)
     try:
         await bot_api.post_group_message(
