@@ -54,7 +54,7 @@ from interop import (
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+互通+骰子+番茄+表情包", "2.0204")
+@register("zerasos_bot", "opaup", "泽拉索斯 —— 个人用多功能插件", "2.0206")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
@@ -116,63 +116,6 @@ class ZerasosPlugin(Star):
         self.ra_replies = {}
         for key in RA_DEFAULT:
             self.ra_replies[key] = str(ra_cfg.get("ra_" + key, RA_DEFAULT[key]))
-
-        # ── GROUP_MEMBER_ADD 事件注册 ──
-        # QQ 平台会推送 group_member_add 事件，但 botpy 没有对应解析器
-        # 需要直接修补 botpy 的 ConnectionState 和 botClient
-        try:
-            from botpy.connection import ConnectionState
-            from botpy import Client
-            import types, gc
-
-            # 1. 注册解析器到 ConnectionState 类
-            if not hasattr(ConnectionState, 'parse_group_member_add'):
-                async def _parse_group_member_add(self, payload):
-                    d = payload if isinstance(payload, dict) else {}
-                    if 'd' in d:
-                        d = d['d']
-                    self._dispatch("group_member_add", d)
-                setattr(ConnectionState, 'parse_group_member_add', _parse_group_member_add)
-                logger.info("[欢迎] 已注册 parse_group_member_add 到 ConnectionState 类")
-
-            # 2. 找 botClient 实例 + 更新已有 ConnectionState 的 parsers
-            for obj in gc.get_objects():
-                if isinstance(obj, Client):
-                    # 绑定 on_group_member_add 处理器
-                    if not hasattr(obj, 'on_group_member_add'):
-                        async def _on_group_member_add(self, event_data):
-                            try:
-                                if isinstance(event_data, dict):
-                                    d = event_data.get('d', event_data)
-                                else:
-                                    d = event_data
-                                group_openid = d.get('group_openid')
-                                member_openid = d.get('member_openid')
-                                if group_openid and member_openid:
-                                    api = getattr(self, 'api', None)
-                                    if api:
-                                        from welcome import send_welcome
-                                        await send_welcome(api, group_openid, member_openid)
-                            except Exception as e:
-                                logger.error(f'[欢迎] on_group_member_add 错误: {e}')
-                        obj.on_group_member_add = types.MethodType(_on_group_member_add, obj)
-                        logger.info("[欢迎] 已绑定 on_group_member_add 处理器")
-
-                    # 3. 更新已有 ConnectionState 实例的 parsers 字典
-                    cs = getattr(obj, '_connection', None)
-                    if cs and hasattr(cs, 'state') and hasattr(cs.state, 'parsers'):
-                        if 'group_member_add' not in cs.state.parsers:
-                            cs.state.parsers['group_member_add'] = cs.state.parse_group_member_add
-                            logger.info("[欢迎] 已更新 ConnectionState 实例 parsers")
-
-                    # 4. 确保 intent
-                    if hasattr(obj, 'intents') and isinstance(obj.intents, int):
-                        if not (obj.intents & (1 << 24)):
-                            obj.intents |= 1 << 24
-                            logger.info("[欢迎] 已设置 GROUP_MEMBER intent 位")
-                    break  # 只处理第一个 botClient 实例
-        except Exception as e:
-            logger.warning(f"[欢迎] GROUP_MEMBER_ADD 注册失败: {e}")
 
     # ── 初始化管理员 ID 列表 ──
     def _init_admin_ids(self):
@@ -495,6 +438,16 @@ class ZerasosPlugin(Star):
             #     yield self._render_result(event, result)
             debug_msg = self.cm.debug_result() if self.cm.debug_mode else ""
             await self._send_checkin_md(event, result.get("embed_data", {}), self.image_url, debug_msg=debug_msg)
+
+    # =================== 事件监听区==========================
+    # 群成员加入事件
+    @event_message_type(EventMessageType.GROUP_MEMBER_JOIN)
+    async def on_member_join(self, event: AstrMessageEvent):
+        group_openid = event.get_group_id()
+        member_openid = event.message_obj.sender.user_id
+
+        await self.send_welcome(event.bot.api, group_openid, member_openid)
+
 
     # =================== 指令代理 ===================
     @command("checkin")
