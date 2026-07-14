@@ -441,12 +441,14 @@ class ZerasosPlugin(Star):
 
     # =================== 事件监听区==========================
     # 群成员加入事件
-    @event_message_type(EventMessageType.GROUP_MEMBER_JOIN)
-    async def on_member_join(self, event: AstrMessageEvent):
-        group_openid = event.get_group_id()
-        member_openid = event.message_obj.sender.user_id
-
-        await self.send_welcome(event.bot.api, group_openid, member_openid)
+    # @event_message_type(EventMessageType.GROUP_MESSAGE)
+    # async def on_member_join(self, event: AstrMessageEvent):
+        # group_openid = event.get_group_id()
+        # member_openid = event.message_obj.sender.user_id
+        # await self.send_welcome(event.bot.api, group_openid, member_openid)
+    @filter.event_message_type(filter.EventMessageTpe.OTHER_MESSAGE)
+    async def on_other_message(self, event: AstrMessageEvent):
+        logging.info(f"收到事件：{event.message_obj.raw_message}")
 
 
     # =================== 指令代理 ===================
