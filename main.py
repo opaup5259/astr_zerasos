@@ -105,7 +105,7 @@ class ZerasosPlugin(Star):
             context=context,
         )
 
-        self._register_task = asyncio.create_task(self._register_group_member_handler())
+        self._setup_task = asyncio.create_task(self._delayed_setup())
 
         # ── 骰子 ──
         dice_settings_init(data_dir)
@@ -162,8 +162,8 @@ class ZerasosPlugin(Star):
         self.fm.on_config_update(self.config)
         self.bqb.on_config_update(self.config)
 
-    async def _register_group_member_handler(self):
-        """延迟注册 GROUP_MEMBER_ADD 事件处理器（参考 group_welcome 插件模式）。"""
+    async def _delayed_setup(self):
+        """延迟修补 botpy：等 AstrBot 完全加载后再注册 GROUP_MEMBER_ADD 事件处理器。"""
         try:
             from astrbot.core.platform.sources.qqofficial.qqofficial_platform_adapter import QQOfficialPlatformAdapter
             from botpy.connection import ConnectionState
@@ -174,7 +174,7 @@ class ZerasosPlugin(Star):
                 for adapter in self.context.platform_manager.get_insts():
                     if not isinstance(adapter, QQOfficialPlatformAdapter):
                         continue
-                    bot = adapter.bot
+                    bot = adapter.client
                     if not bot:
                         continue
 
