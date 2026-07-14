@@ -1,155 +1,44 @@
 {
-	"enable_checkin": {
-		"type": "bool",
-		"description": "启用签到功能",
-		"default": true
-	},
-	"debug_mode": {
-		"type": "bool",
-		"description": "调试模式：输出详细日志方便排查问题",
-		"default": false
-	},
-	"image_url": {
-		"type": "string",
-		"description": "签到图片URL",
-		"hint": "签到消息顶部显示的图片链接",
-		"obvious_hint": true,
-		"default": "https://pic1.imgdb.cn/item/6a5397a24893f89183bae75f.png"
-	},
-	"admin_ids": {
-		"type": "list",
-		"description": "管理员 ID 列表（多平台）",
-		"hint": "这里填所有管理员账号的 ID。OneBot v11 填 QQ 号，QQ 官方 Bot 填 openid。填写后 /zera 系列指令即可在这些账号下执行。",
-		"obvious_hint": true,
-		"default": []
-	},
-
-	"bqb": {
-		"type": "object",
-		"description": "表情包功能",
-		"hint": "来开启表情包大战吧！",
-		"items": {
-			"enable_bqb_send": {
-				"type": "bool",
-				"description": "自动发表情包",
-				"hint": "日常闲聊时概率发送已保存的表情包",
-				"default": true
-			},
-			"enable_bqb_steal": {
-				"type": "bool",
-				"description": "自动偷表情包",
-				"hint": "开启后，看到好图会概率保存到表情包库",
-				"default": true
-			},
-			"bqb_provider_id": {
-				"type": "string",
-				"description": "表情包标签分析模型",
-				"hint": "选择用于分析表情包图片的 AI 模型。建议选择支持视觉能力的模型。留空则自动使用 AstrBot 默认模型。",
-				"obvious_hint": true,
-				"default": "",
-				"_special": "select_provider"
-			}
-		}
-	},
-	"fanqie": {
-		"type": "object",
-		"description": "番茄更新推送",
-		"hint": "这是用爬虫实现的哈……",
-		"items": {
-			"novel_ids": {
-				"type": "string",
-				"description": "番茄小说ID列表",
-				"hint": "填入小说网页链接末尾的纯数字ID。支持同时监控多本小说，请用英文逗号 (,) 隔开。",
-				"obvious_hint": true,
-				"default": "7656265450392669208"
-			},
-			"check_interval": {
-				"type": "int",
-				"description": "检查间隔时间(分钟)",
-				"hint": "后台自动轮询番茄小说的间隔分钟数（默认 10 分钟）。",
-				"obvious_hint": true,
-				"default": 10
-			},
-			"novel_summaries": {
-				"type": "string",
-				"description": "各小说剧情概要（自定义）",
-				"hint": "格式：novelid:{小说过去剧情概要},novelid2:{概要2}。AI播报时会参考此内容。不同小说ID保存不同概要。",
-				"obvious_hint": true,
-				"default": ""
-			}
-		}
-	},
-	"kb_names": {
-		"type": "list",
-		"description": "选择要检索的知识库",
-		"hint": "播报时会自动检索选中的知识库，将相关剧情内容作为上下文参考。留空则不检索。",
-		"obvious_hint": true,
-		"default": [],
-		"_special": "select_knowledgebase"
-	},
-	"persona_id": {
-		"type": "string",
-		"description": "选择播报人格",
-		"hint": "选择在后台播报更新时，所使用的 AstrBot 人格设定。如果不选，则默认以普通助手续口播报。",
-		"obvious_hint": true,
-		"default": "",
-		"_special": "select_persona"
-	},
-	"dice": {
-		"type": "object",
-		"description": "骰系功能",
-		"hint": "命运的轨迹在一开始就已经锚定。",
-		"items": {
-			"enable_dice": {
-				"type": "bool",
-				"description": "启用骰子功能",
-				"hint": "开启后可以使用 .r / 。r / /r 等骰子命令进行跑团掷骰。",
-				"default": true
-			},
-			"dice_reply_rd": {
-				"type": "string",
-				"description": "基础骰(rd/r)回复词",
-				"hint": "掷骰后的回复文本。使用 %VER% 作为骰子结果的占位符。默认：骰子在空中旋转……落定：%VER%",
-				"obvious_hint": true,
-				"default": "骰子在空中旋转……落定：%VER%"
-			},
-			"dice_reply_ra": {
-				"type": "object",
-				"description": "技能检定(ra)回复词",
-				"hint": "占位符：%名称%（用户名） %VER1%（技能名） %VER2%（结果值/最大值） %VER3%（检定结果文字，如「成功」「大失败」）",
-				"items": {
-					"ra_critical_failure": {
-						"type": "string",
-						"description": "大失败",
-						"default": "%名称%的%VER1%检定%VER3%！（%VER2%）"
-					},
-					"ra_failure": {
-						"type": "string",
-						"description": "失败",
-						"default": "%名称%的%VER1%检定%VER3%。（%VER2%）"
-					},
-					"ra_success": {
-						"type": "string",
-						"description": "成功",
-						"default": "%名称%的%VER1%检定%VER3%。（%VER2%）"
-					},
-					"ra_hard_success": {
-						"type": "string",
-						"description": "困难成功",
-						"default": "%名称%的%VER1%检定%VER3%！（%VER2%）"
-					},
-					"ra_extreme_success": {
-						"type": "string",
-						"description": "极难成功",
-						"default": "%名称%的%VER1%检定%VER3%！！（%VER2%）"
-					},
-					"ra_critical_success": {
-						"type": "string",
-						"description": "大成功",
-						"default": "%名称%的%VER1%检定%VER3%！！（%VER2%）"
-					}
-				}
-			}
-		}
-	}
+  "schema": {
+    "enable_checkin": {
+      "description": "是否启用签到功能",
+      "type": "bool",
+      "default": true
+    },
+    "debug_mode": {
+      "description": "签到调试模式",
+      "type": "bool",
+      "default": false
+    },
+    "image_url": {
+      "description": "签到卡片顶部图片 URL",
+      "type": "string",
+      "default": "https://pic1.imgdb.cn/item/6a5397a24893f89183bae75f.png"
+    },
+    "welcome_img": {
+      "description": "欢迎消息底部图片 URL",
+      "type": "string",
+      "default": "https://opa-1316532755.cos.ap-guangzhou.myqcloud.com/zipai.png"
+    },
+    "admin_ids": {
+      "description": "多平台管理员 ID 列表",
+      "type": "list",
+      "default": []
+    },
+    "dice_reply_rd": {
+      "description": ".r/.rd 骰子回复模板",
+      "type": "string",
+      "default": ""
+    },
+    "enable_fanqie": {
+      "description": "是否启用番茄小说更新播报",
+      "type": "bool",
+      "default": true
+    },
+    "enable_bqb": {
+      "description": "是否启用表情包功能",
+      "type": "bool",
+      "default": true
+    }
+  }
 }
