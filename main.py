@@ -14,8 +14,8 @@ import shutil
 shutil.rmtree(os.path.join(_PLUGIN_DIR, "__pycache__"), ignore_errors=True)
 
 from astrbot.api.all import *
-from astrbot.api.event import filter as plugin_filter
-from astrbot.api.event.filter import EventMessageType
+from astrbot.api.all import *
+from astrbot.api.event.filter import EventMessageType, event_message_type
 from astrbot.api.star import StarTools
 # from botpy.message import Embed, EmbedField, EmbedThumbnail # <--- 移除错误的导入
 
@@ -189,7 +189,7 @@ class ZerasosPlugin(Star):
         return "\n\n".join(parts).replace("\n", "<br />")
 
     # =================== on_message（互通+签到+表情包） ===================
-    @plugin_filter.event_message_type(EventMessageType.ALL)
+    @event_message_type(EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):
         # 先剥离 QQ Official Bot 的 @ 前缀（如 [At:qq_official]），使后续 .coc/.r 等能正确匹配
         raw_text = event.message_str.strip()
@@ -446,7 +446,7 @@ class ZerasosPlugin(Star):
         # group_openid = event.get_group_id()
         # member_openid = event.message_obj.sender.user_id
         # await self.send_welcome(event.bot.api, group_openid, member_openid)
-    @filter.event_message_type(filter.EventMessageTpe.OTHER_MESSAGE)
+    @event_message_type(EventMessageTpe.OTHER_MESSAGE)
     async def on_other_message(self, event: AstrMessageEvent):
         logging.info(f"收到事件：{event.message_obj.raw_message}")
 
