@@ -867,7 +867,8 @@ class ZerasosPlugin(Star):
                         )
             except Exception as e:
                 logger.error(f"[签到] 发送 Markdown 失败: {e}")
-                await event.send_plain_text(md_content.replace("\n", "<br />"))
+                # await event.reply_markdown(md_content.replace("\n", "<br />"))
+                await event.reply_markdown("102047593_1783876655", md_content)
 
         event.stop_event()
 
