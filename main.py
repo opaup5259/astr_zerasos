@@ -446,9 +446,9 @@ class ZerasosPlugin(Star):
         # group_openid = event.get_group_id()
         # member_openid = event.message_obj.sender.user_id
         # await self.send_welcome(event.bot.api, group_openid, member_openid)
-    @event_message_type(EventMessageType.OTHER_MESSAGE)
+    @event_message_type(EventMessageType.ALL)
     async def on_other_message(self, event: AstrMessageEvent):
-        logging.info(f"收到事件：{event.message_obj.raw_message}")
+        logger.info(f"收到事件：{event.message_obj.raw_message}")
 
 
     # =================== 指令代理 ===================
