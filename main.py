@@ -37,6 +37,7 @@ from dice.dnd import roll_dnd, format_dnd_char
 from fanqie import FanqieManager
 from bqb import BqbManager
 from welcome import build_welcome_md, send_welcome
+from astrbot.api.all import *
 from interop import init as interop_init
 from interop import detect_role
 from interop import (
@@ -105,7 +106,6 @@ class ZerasosPlugin(Star):
             context=context,
         )
 
-        self._register_task = asyncio.create_task(self._register_group_member_handler())
 
         # ── 骰子 ──
         dice_settings_init(data_dir)
@@ -116,6 +116,63 @@ class ZerasosPlugin(Star):
         self.ra_replies = {}
         for key in RA_DEFAULT:
             self.ra_replies[key] = str(ra_cfg.get("ra_" + key, RA_DEFAULT[key]))
+
+        # ── GROUP_MEMBER_ADD 事件注册 ──
+        # QQ 平台会推送 group_member_add 事件，但 botpy 没有对应解析器
+        # 需要直接修补 botpy 的 ConnectionState 和 botClient
+        try:
+            from botpy.connection import ConnectionState
+            from botpy import Client
+            import types, gc
+
+            # 1. 注册解析器到 ConnectionState 类
+            if not hasattr(ConnectionState, 'parse_group_member_add'):
+                async def _parse_group_member_add(self, payload):
+                    d = payload if isinstance(payload, dict) else {}
+                    if 'd' in d:
+                        d = d['d']
+                    self._dispatch("group_member_add", d)
+                setattr(ConnectionState, 'parse_group_member_add', _parse_group_member_add)
+                logger.info("[欢迎] 已注册 parse_group_member_add 到 ConnectionState 类")
+
+            # 2. 找 botClient 实例 + 更新已有 ConnectionState 的 parsers
+            for obj in gc.get_objects():
+                if isinstance(obj, Client):
+                    # 绑定 on_group_member_add 处理器
+                    if not hasattr(obj, 'on_group_member_add'):
+                        async def _on_group_member_add(self, event_data):
+                            try:
+                                if isinstance(event_data, dict):
+                                    d = event_data.get('d', event_data)
+                                else:
+                                    d = event_data
+                                group_openid = d.get('group_openid')
+                                member_openid = d.get('member_openid')
+                                if group_openid and member_openid:
+                                    api = getattr(self, 'api', None)
+                                    if api:
+                                        from welcome import send_welcome
+                                        await send_welcome(api, group_openid, member_openid)
+                            except Exception as e:
+                                logger.error(f'[欢迎] on_group_member_add 错误: {e}')
+                        obj.on_group_member_add = types.MethodType(_on_group_member_add, obj)
+                        logger.info("[欢迎] 已绑定 on_group_member_add 处理器")
+
+                    # 3. 更新已有 ConnectionState 实例的 parsers 字典
+                    cs = getattr(obj, '_connection', None)
+                    if cs and hasattr(cs, 'state') and hasattr(cs.state, 'parsers'):
+                        if 'group_member_add' not in cs.state.parsers:
+                            cs.state.parsers['group_member_add'] = cs.state.parse_group_member_add
+                            logger.info("[欢迎] 已更新 ConnectionState 实例 parsers")
+
+                    # 4. 确保 intent
+                    if hasattr(obj, 'intents') and isinstance(obj.intents, int):
+                        if not (obj.intents & (1 << 24)):
+                            obj.intents |= 1 << 24
+                            logger.info("[欢迎] 已设置 GROUP_MEMBER intent 位")
+                    break  # 只处理第一个 botClient 实例
+        except Exception as e:
+            logger.warning(f"[欢迎] GROUP_MEMBER_ADD 注册失败: {e}")
 
     # ── 初始化管理员 ID 列表 ──
     def _init_admin_ids(self):
@@ -161,71 +218,6 @@ class ZerasosPlugin(Star):
         )
         self.fm.on_config_update(self.config)
         self.bqb.on_config_update(self.config)
-
-    async def _register_group_member_handler(self):
-        """延迟注册 GROUP_MEMBER_ADD 事件处理器（参考 group_welcome 插件模式）。"""
-        try:
-            from astrbot.core.platform.sources.qqofficial.qqofficial_platform_adapter import QQOfficialPlatformAdapter
-            from botpy.connection import ConnectionState
-
-            GROUP_MEMBER_INTENT = 1 << 24
-
-            for _ in range(15):
-                for adapter in self.context.platform_manager.get_insts():
-                    if not isinstance(adapter, QQOfficialPlatformAdapter):
-                        continue
-                    bot = adapter.bot
-                    if not bot:
-                        continue
-
-                    # 1. 设置意图位
-                    if hasattr(bot, 'intents') and bot.intents is not None:
-                        bot.intents.value |= GROUP_MEMBER_INTENT
-
-                    # 2. 注册解析器到 ConnectionState 类
-                    if not hasattr(ConnectionState, 'parse_group_member_add'):
-                        async def _parse(self, payload):
-                            d = payload if isinstance(payload, dict) else {}
-                            if 'd' in d: d = d['d']
-                            self._dispatch("group_member_add", d)
-                        setattr(ConnectionState, 'parse_group_member_add', _parse)
-
-                    # 3. 注册处理器到 botClient 实例
-                    from welcome import send_welcome
-                    import types
-                    async def _on_group_member_add(self, event_data):
-                        try:
-                            data = event_data.get("d", event_data) if isinstance(event_data, dict) else event_data
-                            if isinstance(data, dict):
-                                group_openid = data.get("group_openid")
-                                member_openid = data.get("member_openid")
-                            else:
-                                group_openid = getattr(data, "group_openid", None)
-                                member_openid = getattr(data, "member_openid", None)
-                            if not group_openid or not member_openid:
-                                return
-                            api = getattr(self, 'api', None)
-                            if api:
-                                await send_welcome(api, group_openid, member_openid)
-                        except Exception as e:
-                            import logging
-                            logging.getLogger(__name__).error(f"[欢迎] 事件处理失败: {e}")
-
-                    bot.on_group_member_add = types.MethodType(_on_group_member_add, bot)
-
-                    # 4. 更新已存在的 ConnectionState 实例
-                    cs = getattr(bot, '_connection_session', None)
-                    if cs and hasattr(cs, 'state') and hasattr(cs.state, 'parsers'):
-                        cs.state.parsers['group_member_add'] = cs.state.parse_group_member_add
-
-                    logger.info("[欢迎] GROUP_MEMBER_ADD 事件处理器注册成功")
-                    return
-
-                await asyncio.sleep(1)
-
-            logger.warning("[欢迎] 未找到 QQOfficialPlatformAdapter，注册失败")
-        except Exception as e:
-            logger.error(f"[欢迎] 注册 GROUP_MEMBER_ADD 处理器失败: {e}")
 
     async def terminate(self):
         await self.fm.terminate()
