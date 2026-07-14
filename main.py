@@ -1083,6 +1083,7 @@ class ZerasosPlugin(Star):
     @staticmethod
     def _render_result(event, result: dict):
         """将 checkin manager 返回的 result dict 转为 AstrBot 响应（非 embed 路径）。"""
-        if result["type"] == "image":
-            return event.image_result(result["path"])
-        return event.plain_result(result["message"])
+        # if result["type"] == "image":
+        #     return event.image_result(result["path"])
+        # return event.plain_result(result["message"])
+        return event.reply_markdown(result["message"])
