@@ -511,7 +511,7 @@ class ZerasosPlugin(Star):
                 uid = normalize_uid(self.cm._uid(event))
                 group_openid = event.get_group_id()
                 if group_openid:
-                    await send_welcome(self.context.bot_api, group_openid, uid, WELCOME_IMG_URL)
+                    await send_welcome(event.bot.api, group_openid, uid, WELCOME_IMG_URL)
                     yield event.plain_result("✅ 欢迎消息已发送（测试）。")
                     return
                 else:
