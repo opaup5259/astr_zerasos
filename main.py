@@ -11,13 +11,12 @@ if _PLUGIN_DIR not in sys.path:
 
 # 清理磁盘上的旧 .pyc 缓存（如果前面已经有进程写入了）
 import shutil
+
 shutil.rmtree(os.path.join(_PLUGIN_DIR, "__pycache__"), ignore_errors=True)
 
 from astrbot.api.all import *
-from astrbot.api.all import *
 from astrbot.api.event.filter import EventMessageType, event_message_type
 from astrbot.api.star import StarTools
-# from botpy.message import Embed, EmbedField, EmbedThumbnail # <--- 移除错误的导入
 
 importlib.invalidate_caches()
 
@@ -37,7 +36,6 @@ from dice.dnd import roll_dnd, format_dnd_char
 from fanqie import FanqieManager
 from bqb import BqbManager
 from welcome import build_welcome_md, send_welcome
-from astrbot.api.all import *
 from interop import init as interop_init
 from interop import detect_role
 from interop import (
@@ -50,11 +48,11 @@ from interop import (
     bind_user_id, unbind_user_id, get_all_bindings,
     bind_group, get_bound_group, get_all_group_bindings,
 )
+from loguru import logger
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯 —— 个人用多功能插件", "2.0206")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
@@ -106,7 +104,6 @@ class ZerasosPlugin(Star):
             context=context,
         )
 
-
         # ── 骰子 ──
         dice_settings_init(data_dir)
         self.dice_roller = DiceRoller()
@@ -116,6 +113,69 @@ class ZerasosPlugin(Star):
         self.ra_replies = {}
         for key in RA_DEFAULT:
             self.ra_replies[key] = str(ra_cfg.get("ra_" + key, RA_DEFAULT[key]))
+
+        # ── 新增：启动猴子补丁，劫持底层加群事件 ──
+        self._hook_restapi()
+
+    # ── 底层事件劫持（Monkey Patch） ──
+    def _hook_restapi(self):
+        """动态劫持 astrbot_plugin_qq_restapi 的底层分发器，截获加群事件"""
+        try:
+            # 尝试导入目标库的分发器模块
+            import astrbot_plugin_qq_restapi.runtime.dispatch as restapi_dispatch
+
+            # 备份原始的 dispatch 方法
+            original_dispatch = restapi_dispatch.Dispatcher.dispatch
+
+            # 定义我们的拦截器
+            async def hacked_dispatch(dispatcher_instance, payload, *args, **kwargs):
+                try:
+                    # 偷看原始 Payload (QQ 官方 API 的事件类型在 't' 字段，数据在 'd' 字段)
+                    event_type = payload.get("t")
+
+                    # 捕捉群成员增加事件
+                    if event_type in ["GROUP_MEMBER_ADD", "GROUP_MEMBER_INCREASE"]:
+                        data = payload.get("d", {})
+                        # QQ 官方不同接口字段名可能有差异，做一下兼容取值
+                        group_id = data.get("group_openid") or data.get("group_id")
+                        user_id = data.get("member_openid") or data.get("user_id")
+
+                        logger.info(f"🔪 [底层拦截成功] 检测到新人入群！群: {group_id}, QQ: {user_id}")
+
+                        if group_id and user_id:
+                            bot_api = None
+                            # 从 AstrBot 上下文中寻找可用的 bot_api 实例
+                            for bot_id, bot in self.context.bots.items():
+                                if bot.platform == "qq" or "restapi" in bot_id.lower():
+                                    bot_api = bot.api
+                                    break
+
+                            # 兜底：如果找不到特定的，就用第一个连接的 bot
+                            if not bot_api and self.context.bots:
+                                bot_api = list(self.context.bots.values())[0].api
+
+                            if bot_api:
+                                # 丢进后台异步执行，不阻塞主线程
+                                asyncio.create_task(send_welcome(bot_api, group_id, user_id))
+                            else:
+                                logger.error("[欢迎] 未能找到可用的 Bot API 实例。")
+                except Exception as e:
+                    logger.error(f"[欢迎] 处理劫持事件时出错: {e}")
+
+                # 偷看完毕，放行数据（兼容异步和同步的原函数）
+                if asyncio.iscoroutinefunction(original_dispatch):
+                    return await original_dispatch(dispatcher_instance, payload, *args, **kwargs)
+                else:
+                    return original_dispatch(dispatcher_instance, payload, *args, **kwargs)
+
+            # 将原始方法替换为我们的拦截器
+            restapi_dispatch.Dispatcher.dispatch = hacked_dispatch
+            logger.info("[泽拉索斯] QQ RestAPI 底层加群事件劫持已就绪！")
+
+        except ImportError:
+            logger.info("[泽拉索斯] 未检测到 astrbot_plugin_qq_restapi，跳过加群劫持。")
+        except Exception as e:
+            logger.warning(f"[泽拉索斯] 劫持底层事件失败: {e}")
 
     # ── 初始化管理员 ID 列表 ──
     def _init_admin_ids(self):
@@ -228,8 +288,6 @@ class ZerasosPlugin(Star):
         # 绑定后该用户在两边签到数据共享
         # ════════════════════════════════════════════════════
         if role == "secondary" and event.is_at_or_wake_command and platform_uid:
-            # 优先用 AstrBot 原生方法去掉 @前缀，否则手动 strip
-            # QQ Official 的 @格式: [At:qq_official] 绑定qq...
             clean = re.sub(r"^\[At:\S+\]\s*", "", text).strip()
             match_bind = re.match(r"^/?\s*(绑定qq|绑定QQ)\s*(\d{5,})\s*$", clean)
             if match_bind:
@@ -250,7 +308,6 @@ class ZerasosPlugin(Star):
             raw = text[1:].strip()
             lower = raw.lower()
 
-            # ── .dice set <面数> ──
             if re.match(r"^dice set\s+\d+\s*$", lower) or re.match(r"^骰子 set\s+\d+\s*$", lower):
                 parts = raw.split()
                 if len(parts) >= 3 and parts[2].isdigit():
@@ -264,17 +321,14 @@ class ZerasosPlugin(Star):
                     yield event.plain_result(f"用法：.dice set 骰子面数（{valid_dice_list()}）")
                 return
 
-            # ── .dice（查看当前骰子） ──
             if lower in ("dice", "骰子"):
                 current = get_dice(umo, platform_uid or "")
                 yield event.plain_result(f"当前骰子：D{current}")
                 return
 
-            # ── .ra 技能检定 ──
             if re.match(r"^ra", lower):
                 ra_text = raw[2:].strip() if len(raw) > 2 else ""
                 ra_parsed = parse_ra(ra_text)
-                # 获取用户名
                 try:
                     ra_name = event.message_obj.sender.nickname or platform_uid[:8]
                 except Exception:
@@ -291,7 +345,6 @@ class ZerasosPlugin(Star):
                 yield event.plain_result(reply)
                 return
 
-            # ── .coc / 。coc — COC7th 角色卡 ──
             cm = re.match(r"^coc(\d*)$", lower)
             if cm:
                 num_str = cm.group(1)
@@ -310,16 +363,14 @@ class ZerasosPlugin(Star):
                     yield r
                 return
 
-            # ── .dnd / 。dnd / /dnd — DND 5e 角色卡（严格匹配） ──
             dm = re.match(r"^dnd(\d*)$", lower)
             if dm:
                 count = int(dm.group(1)) if dm.group(1) else 1
                 count = min(count, 10)
-                cards = [format_dnd_char(roll_dnd(), i+1) for i in range(count)]
+                cards = [format_dnd_char(roll_dnd(), i + 1) for i in range(count)]
                 yield event.plain_result(self._format_card_table(cards))
                 return
 
-            # ── .r / .rd 掷骰（严格匹配，无多余文本） ──
             parsed = parse_dice(raw)
             if parsed or lower in ('r', 'rd', 'R', 'RD'):
                 user_id = platform_uid or "_anonymous"
@@ -352,9 +403,7 @@ class ZerasosPlugin(Star):
                 return
 
         # ════════════════════════════════════════════════════
-        # 互通去重：自动判断 Primary/Secondary
-        # primary (OneBot v11)  → 直接处理并标记已发送
-        # secondary (QQ Official) → 检测 primary 是否已处理/已发送
+        # 互通去重
         # ════════════════════════════════════════════════════
         if text and not text.startswith("/"):
             should_handle = should_respond(umo, text, role)
@@ -367,26 +416,21 @@ class ZerasosPlugin(Star):
                     f"[互通] secondary 跳过: 同消息已被 primary 处理 "
                     f"(umo={umo[:40] if umo else ''})"
                 )
-            # BQB 偷图不受去重影响（偷图是单向行为，不产生回复）
             if has_images:
                 await self.bqb.maybe_steal(event)
             return
 
-        # ── BQB：有图则概率偷取 ──
         if has_images:
             await self.bqb.maybe_steal(event)
 
-        # 工具：BQB 概率发送
         async def _try_bqb_send():
             if not has_images and not text.startswith("/"):
                 bqb_path = await self.bqb.maybe_send(event, text)
                 if bqb_path:
-                    # BQB 发送前也标记互通
                     if text:
                         mark_sent(umo, text, role)
                     yield event.image_result(bqb_path)
 
-        # ── 签到逻辑 ──
         if not self.cm.enable_checkin:
             async for r in _try_bqb_send():
                 yield r
@@ -428,28 +472,8 @@ class ZerasosPlugin(Star):
         nickname = self.cm._nickname(event)
         result = await self.cm.process_checkin(uid, nickname, trigger_type)
         if result:
-            # 签到回复：标记互通
-            # if text:
-            #     mark_sent(umo, text, role)
-            # 全部使用 QQ 官方 Bot Embed 消息
-            # if result.get("embed_data"):
-            #     await self._send_embed(event, result["embed_data"])
-            # else:
-            #     yield self._render_result(event, result)
             debug_msg = self.cm.debug_result() if self.cm.debug_mode else ""
             await self._send_checkin_md(event, result.get("embed_data", {}), self.image_url, debug_msg=debug_msg)
-
-    # =================== 事件监听区==========================
-    # 群成员加入事件
-    # @event_message_type(EventMessageType.GROUP_MESSAGE)
-    # async def on_member_join(self, event: AstrMessageEvent):
-        # group_openid = event.get_group_id()
-        # member_openid = event.message_obj.sender.user_id
-        # await self.send_welcome(event.bot.api, group_openid, member_openid)
-    @event_message_type(EventMessageType.ALL)
-    async def on_other_message(self, event: AstrMessageEvent):
-        logger.info(f"收到事件：{event.message_obj.raw_message}")
-
 
     # =================== 指令代理 ===================
     @command("checkin")
@@ -491,7 +515,6 @@ class ZerasosPlugin(Star):
 
         # ── checkin / 签到（所有人可用） ──
         if subcmd == "checkin":
-            # 子子指令检查：/zera checkin reset confirm force（管理员）
             if len(parts) >= 3:
                 sub2 = parts[2].lower()
                 if sub2 == "reset":
@@ -504,7 +527,6 @@ class ZerasosPlugin(Star):
                     else:
                         yield event.plain_result("用法: /zera checkin reset confirm force")
                     return
-            # 普通签到
             if not self.cm.enable_checkin:
                 yield event.plain_result("签到功能未开启。")
                 return
@@ -659,7 +681,6 @@ class ZerasosPlugin(Star):
                     ))
 
             elif icmd == "bind":
-                # /zera interop bind <openid> <QQ号>
                 if len(parts) >= 5:
                     oid = parts[3]
                     qq = parts[4]
@@ -671,7 +692,6 @@ class ZerasosPlugin(Star):
                     yield event.plain_result("用法: /zera interop bind <openid> <QQ号>")
 
             elif icmd == "unbind":
-                # /zera interop unbind <openid>
                 if len(parts) >= 4:
                     oid = parts[3]
                     if unbind_user_id(oid):
@@ -690,12 +710,12 @@ class ZerasosPlugin(Star):
                     for oid, qq in bindings.items():
                         lines.append(f"  {oid[:24]}... → {qq}")
                     yield event.plain_result(self._br_text("用法:\n"
-                        "/zera interop status     互通状态\n"
-                        "/zera interop admin      管理员ID\n"
-                        "/zera interop admin add/del <ID>  添加/移除\n"
-                        "/zera interop bindings   查看用户绑定\n"
-                        "/zera interop bind <openid> <QQ>   强制绑定\n"
-                        "/zera interop unbind <openid>      解除绑定"))
+                                                           "/zera interop status     互通状态\n"
+                                                           "/zera interop admin      管理员ID\n"
+                                                           "/zera interop admin add/del <ID>  添加/移除\n"
+                                                           "/zera interop bindings   查看用户绑定\n"
+                                                           "/zera interop bind <openid> <QQ>   强制绑定\n"
+                                                           "/zera interop unbind <openid>      解除绑定"))
             elif icmd == "status":
                 from interop import _SHARED_STATE
                 pending = len(_SHARED_STATE.get("processing_locks", {}))
@@ -724,7 +744,7 @@ class ZerasosPlugin(Star):
                 lines = [f"表情包列表 第{page}/{self.bqb.total_pages()}页"]
                 for item in items:
                     tags = ",".join(item.get("tags", []))
-                    lines.append(f"[{item['id']}]|{tags}|{item.get('time','')}")
+                    lines.append(f"[{item['id']}]|{tags}|{item.get('time', '')}")
                 yield event.plain_result(self._br_text("\n".join(lines)))
 
             elif bcmd == "remove":
@@ -749,7 +769,6 @@ class ZerasosPlugin(Star):
                     yield event.plain_result(f"❌ 未找到表情包 #{num}")
 
             elif bcmd == "add":
-                # 从消息中提取图片
                 urls = self.bqb._extract_images(event)
                 if not urls:
                     yield event.plain_result("请同时发送图片。用法: 发送带图消息 + /zera bqb add")
@@ -790,7 +809,6 @@ class ZerasosPlugin(Star):
                 yield event.plain_result("用法: /zera bqb <list|add|remove|get|modify|remake>")
             return
 
-        # ── 未知子指令 ──
         yield event.plain_result(f"未知指令 /zera {subcmd}，发送 /zera help 查看帮助")
 
     # =================== Embed 发送 ===================
@@ -800,7 +818,6 @@ class ZerasosPlugin(Star):
         image_url: 顶部图片链接（来自 WebUI 配置）。
         debug_msg 非空时额外发送一条 debug 消息到聊天。"""
         import random
-        raw = event.message_obj.raw_message
         msg_id = event.message_obj.message_id
 
         raw_data = embed_data.get("_raw", {})
@@ -817,21 +834,40 @@ class ZerasosPlugin(Star):
             f"# 继续努力，Zerasos 期待收到你的信仰力哦！"
         )
 
-        if hasattr(raw, "group_openid") and raw.group_openid:
-            await event.bot.api.post_group_message(
-                group_openid=raw.group_openid,
-                markdown={"content": md_content},
-                msg_type=2,
-                msg_id=msg_id,
-                msg_seq=random.randint(1, 10000),
-            )
-            if debug_msg:
-                await event.bot.api.post_group_message(
-                    group_openid=raw.group_openid,
-                    content=debug_msg,
-                    msg_id=msg_id,
-                    msg_seq=random.randint(1, 10000),
-                )
+        group_id = event.get_group_id()
+        if group_id:
+            try:
+                if hasattr(event.bot.api, "post_group_message"):
+                    await event.bot.api.post_group_message(
+                        group_openid=group_id,
+                        markdown={"content": md_content},
+                        msg_type=2,
+                        msg_id=msg_id,
+                        msg_seq=random.randint(1, 1000000),
+                    )
+                else:
+                    await event.bot.api.call_action(
+                        "post_group_message",
+                        group_openid=group_id,
+                        markdown={"content": md_content},
+                        msg_type=2,
+                        msg_id=msg_id,
+                        msg_seq=random.randint(1, 1000000),
+                    )
+
+                if debug_msg:
+                    if hasattr(event.bot.api, "post_group_message"):
+                        await event.bot.api.post_group_message(
+                            group_openid=group_id, content=debug_msg, msg_id=msg_id, msg_seq=random.randint(1, 1000000)
+                        )
+                    else:
+                        await event.bot.api.call_action(
+                            "post_group_message", group_openid=group_id, content=debug_msg, msg_id=msg_id,
+                            msg_seq=random.randint(1, 1000000)
+                        )
+            except Exception as e:
+                logger.error(f"[签到] 发送 Markdown 失败: {e}")
+                await event.send_plain_text(md_content.replace("\n", "<br />"))
 
         event.stop_event()
 
@@ -872,49 +908,45 @@ class ZerasosPlugin(Star):
                 "rows": [
                     {
                         "buttons": [
-                            {
-                                "id": "btn1",
-                                "render_data": {"label": "生成一次", "style": 1},
-                                "action": {"type": 2, "permission": {"type": 2}, "data": ".coc", "enter": True}
-                            },
-                            {
-                                "id": "btn2",
-                                "render_data": {"label": "生成三次", "style": 1},
-                                "action": {"type": 2, "permission": {"type": 2}, "data": ".coc3", "enter": True}
-                            },
-                            {
-                                "id": "btn3",
-                                "render_data": {"label": "生成五次", "style": 1},
-                                "action": {"type": 2, "permission": {"type": 2}, "data": ".coc5", "enter": True}
-                            }
+                            {"id": "btn1", "render_data": {"label": "生成一次", "style": 1},
+                             "action": {"type": 2, "permission": {"type": 2}, "data": ".coc", "enter": True}},
+                            {"id": "btn2", "render_data": {"label": "生成三次", "style": 1},
+                             "action": {"type": 2, "permission": {"type": 2}, "data": ".coc3", "enter": True}},
+                            {"id": "btn3", "render_data": {"label": "生成五次", "style": 1},
+                             "action": {"type": 2, "permission": {"type": 2}, "data": ".coc5", "enter": True}}
                         ]
                     }
                 ]
             }
 
-            raw = event.message_obj.raw_message
             msg_id = event.message_obj.message_id
-
             body = {
                 "markdown": {"content": md_content},
                 "keyboard": {"content": keyboard_content},
                 "msg_type": 2,
                 "msg_id": msg_id,
-                "msg_seq": random.randint(1, 10000),
+                "msg_seq": random.randint(1, 1000000),
             }
 
-            if hasattr(raw, "group_openid") and raw.group_openid:
-                await event.bot.api.post_group_message(
-                    group_openid=raw.group_openid,
-                    **body,
-                )
-            elif hasattr(raw, "author") and hasattr(raw.author, "user_openid"):
-                await event.post_c2c_message(
-                    openid=raw.author.user_openid,
-                    **body,
-                )
-            else:
-                yield event.plain_result(md_content)
+            group_id = event.get_group_id()
+            user_id = event.get_sender_id()
+
+            try:
+                if group_id:
+                    if hasattr(event.bot.api, "post_group_message"):
+                        await event.bot.api.post_group_message(group_openid=group_id, **body)
+                    else:
+                        await event.bot.api.call_action("post_group_message", group_openid=group_id, **body)
+                elif user_id:
+                    if hasattr(event.bot.api, "post_c2c_message"):
+                        await event.bot.api.post_c2c_message(openid=user_id, **body)
+                    else:
+                        await event.bot.api.call_action("post_c2c_message", openid=user_id, **body)
+                else:
+                    yield event.plain_result(md_content.replace("\n", "<br />"))
+            except Exception as e:
+                logger.error(f"[COC] 发送高级消息失败: {e}")
+                yield event.plain_result(md_content.replace("\n", "<br />"))
 
             if batch_idx < batch_count - 1:
                 import asyncio
@@ -949,11 +981,9 @@ class ZerasosPlugin(Star):
     async def r_cmd(self, event: AstrMessageEvent):
         """掷骰 .r / .rd"""
         text = event.message_str.strip()
-        # 去掉 /r 或 /rd 前缀，取出表达式
         expr = re.sub(r"^\[At:\S+\]\s*", "", text).strip()
         expr = re.sub(r"^/r[d]?\s*", "", expr, flags=re.IGNORECASE).strip()
 
-        # 获取 user_id（从 event 取）
         try:
             platform_uid = str(event.message_obj.sender.user_id)
         except Exception:
@@ -986,7 +1016,6 @@ class ZerasosPlugin(Star):
         """COC 技能检定"""
         text = event.message_str.strip()
         clean = re.sub(r"^\[At:\S+\]\s*", "", text).strip()
-        # 去掉 /ra 前缀
         ra_expr = re.sub(r"^/ra\s*", "", clean, flags=re.IGNORECASE).strip()
 
         try:
@@ -1017,7 +1046,6 @@ class ZerasosPlugin(Star):
         """查看/设置默认骰子"""
         text = event.message_str.strip()
         clean = re.sub(r"^\[At:\S+\]\s*", "", text).strip()
-        # 去掉 /dice 前缀
         args = re.sub(r"^/dice\s*", "", clean, flags=re.IGNORECASE).strip()
 
         try:
@@ -1026,7 +1054,6 @@ class ZerasosPlugin(Star):
             platform_uid = ""
         umo = getattr(event, 'unified_msg_origin', '')
 
-        # /dice set <面数>
         m = re.match(r"^set\s+(\d+)$", args, re.IGNORECASE)
         if m:
             val = int(m.group(1))
@@ -1048,7 +1075,7 @@ class ZerasosPlugin(Star):
         count_str = re.sub(r"^/dnd\s*", "", clean, flags=re.IGNORECASE).strip()
         count = int(count_str) if count_str.isdigit() else 1
         count = min(count, 10)
-        cards = [format_dnd_char(roll_dnd(), i+1) for i in range(count)]
+        cards = [format_dnd_char(roll_dnd(), i + 1) for i in range(count)]
         yield event.plain_result(self._format_card_table(cards))
         event.stop_event()
 
