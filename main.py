@@ -865,10 +865,19 @@ class ZerasosPlugin(Star):
                             "post_group_message", group_openid=group_id, content=debug_msg, msg_id=msg_id,
                             msg_seq=random.randint(1, 1000000)
                         )
+                temp_md_params = {
+                    "user_nickname": raw_data.get("nickname", ""),
+                    "add_faith": raw_data.get("add_faith", ""),
+                    "total_days": raw_data.get("total_days", ""),
+                    "consecutive_days": raw_data.get("consecutive_days", ""),
+                    "total_faith": raw_data.get("total_faith", ""),
+
+                }
+
+                await event.reply_markdown("102047593_1783876655", temp_md_params)
             except Exception as e:
                 logger.error(f"[签到] 发送 Markdown 失败: {e}")
                 # await event.reply_markdown(md_content.replace("\n", "<br />"))
-                await event.reply_markdown("102047593_1783876655", md_content)
 
         event.stop_event()
 
