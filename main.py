@@ -99,7 +99,6 @@ class ZerasosPlugin(Star):
         self.fm.start_background_loop()
 
         # ── BQB（共享 data_dir） ──
-        WELCOME_IMG_URL = "https://opa-1316532755.cos.ap-guangzhou.myqcloud.com/zipai.png"
         self.bqb = BqbManager(
             data_dir=data_dir,
             config=self.config,

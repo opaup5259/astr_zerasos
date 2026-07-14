@@ -34,9 +34,9 @@ def build_welcome_md(at_text: str, img_url: str) -> str:
         f"![恩赐#400px#300px]({img_url})"
     )
 
-async def send_welcome(bot_api, group_openid: str, member_openid: str, img_url: str = WELCOME_IMG_URL):
+async def send_welcome(bot_api, group_openid: str, member_openid: str):
     at_text = f"<@!{member_openid}>"
-    md_content = build_welcome_md(at_text, img_url)
+    md_content = build_welcome_md(at_text, WELCOME_IMG_URL)
     msg_seq = random.randint(1, 10000)
     try:
         await bot_api.post_group_message(
