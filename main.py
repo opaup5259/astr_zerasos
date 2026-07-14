@@ -36,6 +36,7 @@ from dice.coc import roll_coc7th, roll_coc5th, format_coc_char
 from dice.dnd import roll_dnd, format_dnd_char
 from fanqie import FanqieManager
 from bqb import BqbManager
+from welcome import build_welcome_md, send_welcome
 from interop import init as interop_init
 from interop import detect_role
 from interop import (
@@ -98,6 +99,7 @@ class ZerasosPlugin(Star):
         self.fm.start_background_loop()
 
         # ── BQB（共享 data_dir） ──
+        WELCOME_IMG_URL = "https://opa-1316532755.cos.ap-guangzhou.myqcloud.com/zipai.png"
         self.bqb = BqbManager(
             data_dir=data_dir,
             config=self.config,
@@ -501,6 +503,20 @@ class ZerasosPlugin(Star):
             if result:
                 yield self._render_result(event, result)
             return
+
+        # ── /zera welcome test（免管理员，测试用） ──
+        if subcmd == "welcome" and len(parts) >= 2:
+            action = parts[2] if len(parts) > 2 else ""
+            if action == "test":
+                uid = normalize_uid(self.cm._uid(event))
+                group_openid = event.get_group_id()
+                if group_openid:
+                    await send_welcome(self.context.bot_api, group_openid, uid, WELCOME_IMG_URL)
+                    yield event.plain_result("✅ 欢迎消息已发送（测试）。")
+                    return
+                else:
+                    yield event.plain_result("⚠️ 无法获取当前群 ID。")
+                    return
 
         # ── 以下指令需要管理员权限 ──
         if not _is_admin and subcmd not in ("fanqie",):
