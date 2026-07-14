@@ -36,7 +36,6 @@ from dice.coc import roll_coc7th, roll_coc5th, format_coc_char
 from dice.dnd import roll_dnd, format_dnd_char
 from fanqie import FanqieManager
 from bqb import BqbManager
-from welcome import build_welcome_md, send_welcome, patch_botpy_for_group_member
 from interop import init as interop_init
 from interop import detect_role
 from interop import (
@@ -97,15 +96,6 @@ class ZerasosPlugin(Star):
             plugin=self,
         )
         self.fm.start_background_loop()
-
-        # ── 欢迎图片 URL ──
-        self.welcome_img = str(self.config.get("welcome_img", "https://opa-1316532755.cos.ap-guangzhou.myqcloud.com/zipai.png"))
-
-        # ── 修补 botpy 支持群成员加入事件 ──
-        try:
-            patch_botpy_for_group_member(self.welcome_img)
-        except Exception as e:
-            logger.warning(f"[泽拉索斯] 欢迎模块修补失败: {e}")
 
         # ── BQB（共享 data_dir） ──
         self.bqb = BqbManager(
@@ -510,59 +500,6 @@ class ZerasosPlugin(Star):
             result = await self.cm.process_checkin(uid, nickname, "hard")
             if result:
                 yield self._render_result(event, result)
-            return
-
-        # ── welcome test ──
-        if subcmd == "welcome":
-            # /zera welcome test [@openid]
-            if len(parts) >= 3 and parts[2].lower() == "test":
-                if not _is_admin:
-                    yield event.plain_result("你没有权限。")
-                    return
-
-                # 尝试从消息中提取 @ 的成员 openid（QQ Official 格式）
-                at_openid = ""
-                raw_text2 = event.message_str.strip()
-                at_match = re.search(r"<@!([a-fA-F0-9]+)>", raw_text2)
-                if at_match:
-                    at_openid = at_match.group(1)
-                elif len(parts) >= 4:
-                    # 直接传入 openid
-                    at_openid = parts[3].strip()
-
-                # 判断当前群
-                raw = event.message_obj.raw_message
-                group_openid = getattr(raw, "group_openid", "")
-                if not group_openid:
-                    yield event.plain_result(self._br_text("请在有群聊上下文中使用此命令。"))
-                    return
-
-                if not at_openid:
-                    # 没有指定 @ 成员时，用发送者自己的 openid 做测试
-                    try:
-                        at_openid = str(event.message_obj.sender.user_id)
-                    except Exception:
-                        yield event.plain_result(self._br_text("用法: /zera welcome test [@成员openid]"))
-                        return
-
-                # 发送测试欢迎
-                at_text = f"<@!{at_openid}>"
-                md_content = build_welcome_md(at_text, self.welcome_img)
-
-                import random
-                try:
-                    await event.bot.api.post_group_message(
-                        group_openid=group_openid,
-                        markdown={"content": md_content},
-                        msg_type=2,
-                        msg_id=event.message_obj.message_id,
-                        msg_seq=random.randint(1, 10000),
-                    )
-                    event.stop_event()
-                except Exception as e:
-                    yield event.plain_result(f"发送失败: {e}")
-            else:
-                yield event.plain_result("用法: /zera welcome test [@openid]")
             return
 
         # ── 以下指令需要管理员权限 ──
