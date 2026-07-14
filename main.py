@@ -479,20 +479,21 @@ class ZerasosPlugin(Star):
     @command("checkin")
     async def checkin_cmd(self, event: AstrMessageEvent):
         """快捷签到，等价于 /zera checkin"""
-        if not self.cm.enable_checkin:
-            yield event.plain_result("签到功能未开启。")
-            return
+        # if not self.cm.enable_checkin:
+        #     yield event.plain_result("签到功能未开启。")
+        #     return
         uid = normalize_uid(self.cm._uid(event))
         if not uid:
             return
         nickname = self.cm._nickname(event)
         result = await self.cm.process_checkin(uid, nickname, "hard")
         if result:
-            debug_msg = self.cm.debug_result() if self.cm.debug_mode else ""
-            if result.get("embed_data"):
-                await self._send_checkin_md(event, result["embed_data"], self.image_url, debug_msg=debug_msg)
-            else:
-                yield self._render_result(event, result)
+            await self._send_checkin_md(event, result["embed_data"], self.image_url, debug_msg=debug_msg)
+        #     debug_msg = self.cm.debug_result() if self.cm.debug_mode else ""
+        #     if result.get("embed_data"):
+        #         await self._send_checkin_md(event, result["embed_data"], self.image_url, debug_msg=debug_msg)
+        #     else:
+        #         yield self._render_result(event, result)
 
     # =================== /zera 父指令 ===================
     @command("zera")
@@ -817,66 +818,71 @@ class ZerasosPlugin(Star):
         """通过 QQ Official Bot API 发送签到消息（Markdown 格式）。
         image_url: 顶部图片链接（来自 WebUI 配置）。
         debug_msg 非空时额外发送一条 debug 消息到聊天。"""
-        import random
-        msg_id = event.message_obj.message_id
-
+        # import random
+        # msg_id = event.message_obj.message_id
+        #
         raw_data = embed_data.get("_raw", {})
-        md_content = (
-            f"# 🌟 签到成功\n"
-            f"> **当前信徒**：{raw_data.get('nickname', '')}\n"
-            f"> **信仰跃升**：{raw_data.get('add_faith', 0)} 点\n"
-            f"> **累计签到**：{raw_data.get('total_days', 0)} 天\n"
-            f"> **连续签到**：{raw_data.get('consecutive_days', 0)} 天\n"
-            f"> **总信仰值**：{raw_data.get('total_faith', 0)}\n"
-            f"\n"
-            f"------\n"
-            f"![签到#400px#300px]({image_url})\n"
-            f"# 继续努力，Zerasos 期待收到你的信仰力哦！"
-        )
 
         group_id = event.get_group_id()
         if group_id:
-            try:
-                if hasattr(event.bot.api, "post_group_message"):
-                    await event.bot.api.post_group_message(
-                        group_openid=group_id,
-                        markdown={"content": md_content},
-                        msg_type=2,
-                        msg_id=msg_id,
-                        msg_seq=random.randint(1, 1000000),
-                    )
-                else:
-                    await event.bot.api.call_action(
-                        "post_group_message",
-                        group_openid=group_id,
-                        markdown={"content": md_content},
-                        msg_type=2,
-                        msg_id=msg_id,
-                        msg_seq=random.randint(1, 1000000),
-                    )
 
-                if debug_msg:
-                    if hasattr(event.bot.api, "post_group_message"):
-                        await event.bot.api.post_group_message(
-                            group_openid=group_id, content=debug_msg, msg_id=msg_id, msg_seq=random.randint(1, 1000000)
-                        )
-                    else:
-                        await event.bot.api.call_action(
-                            "post_group_message", group_openid=group_id, content=debug_msg, msg_id=msg_id,
-                            msg_seq=random.randint(1, 1000000)
-                        )
-                temp_md_params = {
-                    "user_nickname": raw_data.get("nickname", ""),
-                    "add_faith": raw_data.get("add_faith", ""),
-                    "total_days": raw_data.get("total_days", ""),
-                    "consecutive_days": raw_data.get("consecutive_days", ""),
-                    "total_faith": raw_data.get("total_faith", ""),
+            temp_md_params = {
+                "user_nickname": raw_data.get("nickname", ""),
+                "add_faith": raw_data.get("add_faith", ""),
+                "total_days": raw_data.get("total_days", ""),
+                "consecutive_days": raw_data.get("consecutive_days", ""),
+                "total_faith": raw_data.get("total_faith", ""),
+            }
 
-                }
+            await event.reply_markdown("102047593_1783876655", temp_md_params)
 
-                await event.reply_markdown("102047593_1783876655", temp_md_params)
-            except Exception as e:
-                logger.error(f"[签到] 发送 Markdown 失败: {e}")
+        # md_content = (
+        #     f"# 🌟 签到成功\n"
+        #     f"> **当前信徒**：{raw_data.get('nickname', '')}\n"
+        #     f"> **信仰跃升**：{raw_data.get('add_faith', 0)} 点\n"
+        #     f"> **累计签到**：{raw_data.get('total_days', 0)} 天\n"
+        #     f"> **连续签到**：{raw_data.get('consecutive_days', 0)} 天\n"
+        #     f"> **总信仰值**：{raw_data.get('total_faith', 0)}\n"
+        #     f"\n"
+        #     f"------\n"
+        #     f"![签到#400px#300px]({image_url})\n"
+        #     f"# 继续努力，Zerasos 期待收到你的信仰力哦！"
+        # )
+        # group_id = event.get_group_id()
+        # if group_id:
+            # try:
+            #     if hasattr(event.bot.api, "post_group_message"):
+            #         await event.bot.api.post_group_message(
+            #             group_openid=group_id,
+            #             markdown={"content": md_content},
+            #             msg_type=2,
+            #             msg_id=msg_id,
+            #             msg_seq=random.randint(1, 1000000),
+            #         )
+            #     else:
+            #         await event.bot.api.call_action(
+            #             "post_group_message",
+            #             group_openid=group_id,
+            #             markdown={"content": md_content},
+            #             msg_type=2,
+            #             msg_id=msg_id,
+            #             msg_seq=random.randint(1, 1000000),
+            #         )
+            #
+            #     if debug_msg:
+            #         if hasattr(event.bot.api, "post_group_message"):
+            #             await event.bot.api.post_group_message(
+            #                 group_openid=group_id, content=debug_msg, msg_id=msg_id, msg_seq=random.randint(1, 1000000)
+            #             )
+            #         else:
+            #             await event.bot.api.call_action(
+            #                 "post_group_message", group_openid=group_id, content=debug_msg, msg_id=msg_id,
+            #                 msg_seq=random.randint(1, 1000000)
+            #             )
+
+
+            # except Exception as e:
+            #     logger.error(f"[签到] 发送 Markdown 失败: {e}")
                 # await event.reply_markdown(md_content.replace("\n", "<br />"))
 
         event.stop_event()
