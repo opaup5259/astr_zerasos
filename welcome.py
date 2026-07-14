@@ -50,15 +50,90 @@ async def send_welcome(bot_api, group_openid: str, member_openid: str):
         logger.error(f"[欢迎] 发送欢迎消息失败: {e}")
 
 
-async def group_member_add_handler(bot_api, event_data: dict):
-    """群成员加入事件处理函数。
+def patch_bot_for_group_member(bot):
+    """修补 botClient 实例，添加 GROUP_MEMBER 意图 + 事件处理器。
     
-    QQ Official Bot GROUP_MEMBER_ADD 事件格式：
-    { "group_openid": "...", "member_openid": "...", "op_member_openid": "...", "timestamp": ... }
+    必须在 bot 的 WebSocket 连接建立前调用（在 platform_loaded 阶段调用即可）。
+    
+    Args:
+        bot: QQOfficialPlatformAdapter 的 bot 属性（botpy.Client 子类实例）
     """
-    group_openid = event_data.get("group_openid")
-    member_openid = event_data.get("member_openid")
-    if not group_openid or not member_openid:
-        logger.warning(f"[欢迎] 群成员加入事件缺少必要字段: {event_data}")
-        return
-    await send_welcome(bot_api, group_openid, member_openid)
+    try:
+        GROUP_MEMBER_BIT = 1 << 24
+        
+        # 1. 添加意图位
+        if hasattr(bot, 'intents') and bot.intents is not None:
+            if not (bot.intents.value & GROUP_MEMBER_BIT):
+                bot.intents.value |= GROUP_MEMBER_BIT
+                logger.info(f"[欢迎] 已设置 GROUP_MEMBER 意图 (1<<24)")
+            else:
+                logger.info(f"[欢迎] GROUP_MEMBER 意图已存在")
+        else:
+            logger.warning(f"[欢迎] botClient 没有 intents 属性")
+        
+        # 2. 添加 on_group_member_add 处理器（botpy.Client 通过 __getattr__ 调度）
+        if not hasattr(bot, 'on_group_member_add') or not callable(getattr(bot, 'on_group_member_add')):
+            async def on_group_member_add(self, event_data):
+                try:
+                    data = event_data.get("d", event_data) if isinstance(event_data, dict) else {}
+                    group_openid = data.get("group_openid") if isinstance(data, dict) else getattr(data, "group_openid", None)
+                    member_openid = data.get("member_openid") if isinstance(data, dict) else getattr(data, "member_openid", None)
+                    if not group_openid or not member_openid:
+                        logger.warning(f"[欢迎] GROUP_MEMBER_ADD 缺少字段: {data}")
+                        return
+                    api = getattr(self, 'api', None)
+                    if api:
+                        logger.info(f"[欢迎] 检测到新人加入: {group_openid[:20]} / {member_openid[:20]}")
+                        await send_welcome(api, group_openid, member_openid)
+                    else:
+                        logger.warning('[欢迎] botClient 没有 api 属性')
+                except Exception as e:
+                    logger.error(f"[欢迎] 处理群成员加入事件失败: {e}")
+            
+            # 绑定到实例（不是类），避免影响其他 bot 实例
+            import types
+            bot.on_group_member_add = types.MethodType(on_group_member_add, bot)
+            logger.info(f"[欢迎] 已绑定 on_group_member_add 处理器")
+        else:
+            logger.info(f"[欢迎] on_group_member_add 处理器已存在")
+        
+        # 3. 修补 ConnectionState 的 parsers 字典（实例级别）
+        try:
+            from botpy.connection import ConnectionState, ConnectionSession
+            import gc
+            
+            # 方法 A：通过 bot 的 _connection_session 访问
+            cs = getattr(bot, '_connection_session', None)
+            if cs and isinstance(cs, ConnectionSession) and hasattr(cs, 'state'):
+                state = cs.state
+                if 'group_member_add' not in state.parsers:
+                    # 添加解析器到类
+                    if not hasattr(ConnectionState, 'parse_group_member_add'):
+                        async def parse_group_member_add(self, payload):
+                            d = payload if isinstance(payload, dict) else {}
+                            if 'd' in d:
+                                d = d['d']
+                            self._dispatch("group_member_add", d)
+                        setattr(ConnectionState, 'parse_group_member_add', parse_group_member_add)
+                        logger.info(f"[欢迎] 已注册 parse_group_member_add 到 ConnectionState")
+                    
+                    # 更新实例的 parsers 字典
+                    state.parsers['group_member_add'] = state.parse_group_member_add
+            else:
+                # 方法 B：类级别的修补（新连接的实例会继承）
+                if not hasattr(ConnectionState, 'parse_group_member_add'):
+                    async def parse_group_member_add(self, payload):
+                        d = payload if isinstance(payload, dict) else {}
+                        if 'd' in d:
+                            d = d['d']
+                        self._dispatch("group_member_add", d)
+                    setattr(ConnectionState, 'parse_group_member_add', parse_group_member_add)
+                    logger.info(f"[欢迎] 已注册 parse_group_member_add 到 ConnectionState（类级别）")
+        except Exception as e:
+            logger.warning(f"[欢迎] 修补 ConnectionState 失败: {e}")
+        
+        return True
+    
+    except Exception as e:
+        logger.error(f"[欢迎] 修补 bot 失败: {e}")
+        return False
