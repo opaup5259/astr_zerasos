@@ -30,7 +30,7 @@ def build_welcome_md(at_text: str, img_url: str) -> str:
         f"\n"
         f"拿去，这是吾作为偶像的\"营业福利\"（随便拍的）。看完了就赶紧去贡献信仰。嗯。\n"
         f"\n"
-        f"![恩赐]({img_url} =400x300)"
+        f"![恩赐#400px#300px]({img_url})"
     )
 
 async def send_welcome(bot_api, group_openid: str, member_openid: str, img_url: str = WELCOME_IMG_URL):

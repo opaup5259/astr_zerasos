@@ -1,0 +1,24 @@
+=== Reapply Result ===
+Date: 2026-07-14 18:42 CST
+Branch: main
+
+Steps executed:
+1. ✅ Checked branch: main (clean status, _conf_schema.json was modified but not staged)
+2. ✅ welcome.py did not exist → created with build_welcome_md() and send_welcome()
+3. ✅ welcome.py written (49 lines, hardcoded WELCOME_IMG_URL)
+4. ✅ main.py modified:
+   - Added `from welcome import build_welcome_md, send_welcome` import
+   - Added `WELCOME_IMG_URL` local variable before `self.bqb = BqbManager`
+   - Added `/zera welcome test` handler block before the admin-gate comment
+   - _conf_schema.json: NOT touched
+5. ✅ git diff --stat verified (main.py +16 lines)
+6. ✅ Committed & pushed (amended to exclude .idea/):
+   - Commit: 4c01cf9 "v2.0205: 新增群聊成员加入欢迎功能（修复：不动配置文件）"
+   - git push origin main --force
+
+Files changed:
+  .gitignore |   1 +  (added .idea/ to ignores)
+  main.py    |  16 ++++++++++++++++
+  welcome.py |  49 +++++++++++++++++++++++++++++++++++++++++++++++++
+
+Ready.
