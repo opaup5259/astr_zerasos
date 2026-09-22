@@ -3,6 +3,7 @@
 
 功能：
 - 基础骰子：`.r` / `.rd` / `。r` / `/r` 触发
+- 暗骰：`.rh` 结果私聊发送，群内只提示一句
 - 多面骰：`.r 2d6` / `.r 1d20+3` 等标准表达式
 - 伪平均算法：避免极端值聚集，更贴近实体骰的物理分布
 - 自定义回复词：通过 WebUI 配置 `%VER%` 占位符
@@ -11,6 +12,7 @@
 骰子表达式语法（参考海豹骰/溯回）：
   .r          → 1d100 百分比骰
   .rd         → 1d100 百分比骰
+  .rh         → 暗骰，结果私聊
   .r 2d6      → 2 个 6 面骰
   .r 1d20+3   → 1 个 20 面骰 + 3 加值
   .r 3d8-2    → 3 个 8 面骰 - 2 减值
@@ -110,16 +112,18 @@ class DiceRoller:
         self._max_history = 20
     
     def roll(self, sides: int, count: int = 1, modifier: int = 0,
-             user_id: str = "") -> dict:
+             user_id: str = "", fair: bool = True) -> dict:
         """
         执行骰子投掷。
-        
+
         参数：
           sides    — 骰子面数
           count    — 骰子个数
           modifier — 加值/减值
           user_id  — 用户标识（用于防极端）
-        
+          fair     — 是否启用伪平均。伤害、掉血之类的增减值必须传 False，
+                     否则分布会被压向中间，d3 伤害永远打不出 1 或 3。
+
         返回：
           {
             "results": [int, ...],   # 每个骰子的结果
@@ -137,22 +141,25 @@ class DiceRoller:
             count = 1
         if count > 100:
             count = 100  # 防止滥用
-        
+
         results = []
-        user_history = self._history.get(user_id, [])
-        
+        # 伪平均只对"检定骰"有意义，增减值走均匀分布，且不污染历史
+        user_history = self._history.get(user_id, []) if fair else []
+
         for _ in range(count):
-            if user_id:
+            if not fair:
+                r = _SYSRAND.randint(1, sides)
+            elif user_id:
                 r = _streak_breaker(sides, user_history)
             else:
                 r = _fair_roll(sides)
             results.append(r)
-        
+
         # 更新历史
-        if user_id:
+        if fair and user_id:
             self._history.setdefault(user_id, []).extend(results)
             self._history[user_id] = self._history[user_id][-self._max_history:]
-        
+
         raw_total = sum(results)
         total = raw_total + modifier
         
@@ -200,6 +207,23 @@ _EXPR_PATTERN = re.compile(
     r"(?P<mod>[+-]\d+)?"               # 可选加值/减值
     r"\s*$"                             # 结尾
 )
+
+
+def split_hidden(text: str) -> Optional[str]:
+    """
+    识别暗骰指令，返回等价的普通骰表达式，供 parse_dice 复用。
+
+    .rh        → "r"
+    .rh 2d6    → "r 2d6"
+    .rh2d6     → "r2d6"
+    .rh 1d20+3 → "r 1d20+3"
+
+    不是暗骰指令时返回 None。
+    """
+    t = (text or "").strip()
+    if len(t) < 2 or t[0] not in "rR" or t[1] not in "hH":
+        return None
+    return "r" + t[2:]
 
 
 def parse_dice(text: str) -> Optional[dict]:

@@ -1,3 +1,5 @@
 __pycache__/
 *.pyc
 .idea/
+# AstrBot 在插件目录下被导入时会自动生成的默认配置，插件本身不使用
+data/

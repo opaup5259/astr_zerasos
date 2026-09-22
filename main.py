@@ -22,15 +22,17 @@ from astrbot.api.star import StarTools
 importlib.invalidate_caches()
 
 # 热重载时踢掉内存中的旧模块缓存，强制从 .py 重新导入
-_ALL_MODULES = ('checkin', 'fanqie', 'bqb', 'interop', 'dice', 'dice.ra', 'dice.settings', 'dice.coc', 'dice.dnd')
+_ALL_MODULES = ('checkin', 'fanqie', 'bqb', 'interop', 'dice', 'dice.ra', 'dice.pc', 'dice.rh', 'dice.settings', 'dice.coc', 'dice.dnd')
 for _mod in list(sys.modules.keys()):
     if _mod in _ALL_MODULES or any(_mod.startswith(m + '.') for m in _ALL_MODULES):
         del sys.modules[_mod]
 
 from checkin import CheckinManager, set_interop_download_avatar
-from dice import DiceRoller, parse_dice, make_dice_reply, DEFAULT_REPLY_RD
+from dice import DiceRoller, parse_dice, make_dice_reply, split_hidden, DEFAULT_REPLY_RD
 from dice.settings import init as dice_settings_init
 from dice.settings import get_dice, set_dice, valid_dice_list
+from dice import pc as dice_pc
+from dice import rh as dice_rh
 from dice.ra import parse_ra, judge_coc7th, format_ra_reply, DEFAULT_REPLIES as RA_DEFAULT
 from dice.coc import roll_coc7th, roll_coc5th, format_coc_char
 from dice.dnd import roll_dnd, format_dnd_char
@@ -52,8 +54,14 @@ from interop import (
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# 私聊会话的 unified_msg_origin 中间段（暗骰要把结果发到发起者的私聊窗口）
+try:
+    _FRIEND_SESSION_TYPE = MessageType.FRIEND_MESSAGE.value
+except Exception:
+    _FRIEND_SESSION_TYPE = "FriendMessage"
 
-@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+互通+骰子+番茄+表情包", "2.0204")
+
+@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+互通+骰子+番茄+表情包", "2.0301")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
@@ -109,6 +117,8 @@ class ZerasosPlugin(Star):
 
         # ── 骰子 ──
         dice_settings_init(data_dir)
+        dice_pc.init(data_dir)
+        dice_rh.init(data_dir)
         self.dice_roller = DiceRoller()
         self.dice_reply_rd = str(self.config.get("dice_reply_rd", DEFAULT_REPLY_RD))
         # 加载 RA 回复模板
@@ -253,6 +263,289 @@ class ZerasosPlugin(Star):
             parts.append(f"\u3010\u7b2c {i} \u5f20\u3011\n{card}")
         return "\n\n".join(parts).replace("\n", "<br />")
 
+    # =================== 骰子工具（掷骰 / 暗骰） ===================
+    def _roll_text(self, expr_text: str, umo: str, platform_uid: str) -> str:
+        """
+        按表达式掷骰，返回格式化好的回复文本。
+
+        expr_text 需带 r / rd 命令词（与 parse_dice 的语法一致），
+        例如 "r"、"r 2d6"、"rd 1d20+3"。
+        """
+        parsed = parse_dice(expr_text)
+        # 归一化后两个 bot 共享同一份伪平均历史，骰面设置也读同一份
+        user_id = self._user_key(platform_uid) or "_anonymous"
+        sides = parsed["sides"] if parsed else get_dice(self._group_key(umo), user_id)
+        count = parsed["count"] if parsed else 1
+        modifier = parsed["modifier"] if parsed else 0
+        result = self.dice_roller.roll(
+            sides=sides,
+            count=count,
+            modifier=modifier,
+            user_id=user_id,
+        )
+        return make_dice_reply(result, self.dice_reply_rd)
+
+    async def _send_private_dice(self, event: AstrMessageEvent, text: str) -> bool:
+        """
+        把骰点结果私聊发给指令发起者。
+
+        返回是否成功投递。注意 QQ 官方 Bot 的群消息里拿到的 sender_id 是
+        member_openid，而单聊接口要的是 user_openid，两者不是同一个值，
+        这种情况下 QQ 那侧会拒绝，实际收不到消息。
+        """
+        umo = getattr(event, "unified_msg_origin", "") or ""
+        sender_id = event.get_sender_id()
+        targets = []
+
+        # 1) 用户自己绑定的私聊会话，最可靠
+        bound = dice_rh.get_link(self._group_key(umo), self._user_key(sender_id))
+        if bound:
+            targets.append(bound)
+
+        # 2) 退回按平台规则拼出来的会话。QQ 官方 Bot 上群消息里只有
+        #    member_openid，拼出来的不是单聊要的 user_openid，多半发不出去
+        try:
+            platform = event.get_platform_name() or ""
+        except Exception:
+            platform = ""
+        if not platform:
+            platform = umo.split(":", 1)[0] if umo else ""
+        if platform and sender_id:
+            targets.append(f"{platform}:{_FRIEND_SESSION_TYPE}:{sender_id}")
+
+        if not targets:
+            logger.warning("[骰子-暗骰] 无法确定平台或发送者 ID，跳过私聊")
+            return False
+
+        for target in targets:
+            try:
+                await self.context.send_message(target, MessageChain().message(text))
+                return True
+            except Exception as e:
+                logger.warning(f"[骰子-暗骰] 私聊发送失败 ({target}): {e}")
+        return False
+
+    def _rhbind_run(self, umo: str, platform_uid: str, in_group: bool) -> str:
+        """
+        暗骰私聊绑定。
+        私聊里发 → 生成短码；群里发 → 说明怎么绑 / 当前绑没绑。
+        """
+        gkey, ukey = self._group_key(umo), self._user_key(platform_uid)
+        minutes = dice_rh.CODE_TTL // 60
+
+        if in_group:
+            if dice_rh.get_link(gkey, ukey):
+                return ("你已经绑好暗骰私聊投递了，`.rh` 的结果会私聊发给你。\n"
+                        f"要换一个：私聊我发 .rhbind 拿新短码，"
+                        f"再回群里发「绑定私聊 <短码>」。"
+                        f"要解除发「绑定私聊 解除」。")
+            return ("还没绑定暗骰私聊投递。\n"
+                    f"1. 私聊我发 .rhbind，拿到 {minutes} 分钟有效的短码\n"
+                    "2. 回这个群发「绑定私聊 <短码>」")
+
+        code = dice_rh.make_code(umo)
+        if not code:
+            return "生成短码失败，稍后再试。"
+        return (f"你的暗骰绑定码：{code}\n\n"
+                f"回群里发「绑定私聊 {code}」就绑好了。\n"
+                f"（{minutes} 分钟内有效，用一次就失效）")
+
+
+    async def _hidden_roll(self, event: AstrMessageEvent, expr_text: str,
+                           umo: str, platform_uid: str):
+        """
+        暗骰：结果私聊发送，群内只回一句提示。
+
+        私聊场景下本来就是"暗"的，直接把结果回在当前会话。
+        """
+        text = self._roll_text(expr_text, umo, platform_uid)
+
+        if not event.get_group_id():
+            yield event.plain_result(text)
+            return
+
+        sender = event.get_sender_name() or "有人"
+        if await self._send_private_dice(event, text):
+            yield event.plain_result(f"{sender}进行了一次暗骰，结果已私聊发送。")
+        else:
+            yield event.plain_result(
+                f"{sender}的暗骰结果没能私聊送达。\n"
+                "先在私聊里发 .rhbind 拿短码，再回群里发「绑定私聊 <短码>」，"
+                "之后暗骰就能私聊发给你了。"
+            )
+
+    # =================== 人物卡 / 属性系统（.st） ===================
+    @staticmethod
+    def _group_key(umo: str) -> str:
+        """
+        人物卡的作用域标识（群维度）。
+
+        优先用群绑定后的 QQ 群号，这样官方 bot 和三方 bot 里是同一张卡；
+        没有绑定时退回 UMO 的 session 段（三方 bot 的 session 就是 QQ 群号）。
+        没做过 @官方bot 绑定群 的话两个平台仍然各存各的，这是绑定功能的前提。
+        """
+        bound = get_bound_group(umo)
+        if bound:
+            return str(bound)
+        parts = (umo or "").split(":", 2)
+        return parts[2] if len(parts) == 3 else (umo or "")
+
+    @staticmethod
+    def _user_key(platform_uid: str) -> str:
+        """
+        人物卡的用户标识。
+
+        跟签到一样走 normalize_uid：官方 bot 的 openid 会转成 QQ 号，
+        三方 bot 的 QQ 号原样返回，两边指向同一个人、同一张卡。
+        """
+        if not platform_uid:
+            return ""
+        return normalize_uid(platform_uid) or platform_uid
+
+    def _st_value(self, expr: str, user_id: str) -> Optional[int]:
+        """
+        求增减量：纯数字直接返回；骰点表达式掷出总和。
+
+        用均匀分布，不走伪平均——掉血是 1d3 就该有 1/3 概率出 1。
+        """
+        t = (expr or "").strip()
+        if t.isdigit():
+            return int(t)
+        parsed = parse_dice("r " + t)
+        if not parsed:
+            return None
+        result = self.dice_roller.roll(
+            sides=parsed["sides"],
+            count=parsed["count"],
+            modifier=parsed["modifier"],
+            user_id=user_id,
+            fair=False,
+        )
+        return result["total"]
+
+    def _st_show(self, scope: str, uid: str, who: str, rest: str) -> str:
+        """查看人物卡。rest 为空或 all 时显示全部，否则只显示指定项。"""
+        attrs = dice_pc.get_all(scope, uid)
+        if not attrs:
+            return f"{who}还没有人物卡，用 .st 力量50 敏捷60 来录入吧。"
+
+        if rest and rest.lower() != "all":
+            parts = []
+            for name in rest.split():
+                key = dice_pc.normalize_attr_name(name)
+                parts.append(f"{key}:{attrs[key]}" if key in attrs else f"{key}:未录入")
+            return f"{who}的属性：" + " ".join(parts)
+
+        items = " ".join(f"{k}:{v}" for k, v in attrs.items())
+        return f"{who}的人物卡（共 {len(attrs)} 项）：\n{items}"
+
+    def _st_run(self, text: str, umo: str, platform_uid: str, sender_name: str) -> str:
+        """执行 .st 指令，返回回复文本。"""
+        # 群和用户都先归一化，保证两个 bot 共用同一张卡
+        scope = self._group_key(umo)
+        uid = self._user_key(platform_uid)
+        who = sender_name or ""
+        t = (text or "").strip()
+        lower = t.lower()
+
+        # .st —— 查看全部
+        if not t:
+            return self._st_show(scope, uid, who, "")
+
+        # .st clr —— 清空
+        if lower in ("clr", "clear", "清空"):
+            if dice_pc.clear_attrs(scope, uid):
+                return f"已清空{who}的人物卡。"
+            return f"{who}还没有人物卡。"
+
+        # .st show [属性...] / .st 查看
+        if lower.startswith("show") or t.startswith("查看"):
+            rest = t[4:].strip() if lower.startswith("show") else t[2:].strip()
+            return self._st_show(scope, uid, who, rest)
+
+        # .st del <属性...>
+        if lower.startswith("del") or lower.startswith("rm") or t.startswith("删除"):
+            rest = re.sub(r"^(del|rm|删除)", "", t, flags=re.IGNORECASE).strip()
+            names = rest.split()
+            if not names:
+                return "用法：.st del <属性名> [属性名...]"
+            removed = dice_pc.del_attrs(scope, uid, names)
+            if not removed:
+                return "没有找到要删除的属性。"
+            return f"已删除：{'、'.join(removed)}"
+
+        # 录入 / 增减，支持混写（.st 体力13 侦查-5）
+        assigns, mods, unknown = dice_pc.parse_st_tokens(t)
+        lines = []
+
+        if assigns:
+            dice_pc.set_attrs(scope, uid, assigns)
+            shown = " ".join(f"{k}:{v}" for k, v in assigns.items())
+            lines.append(f"已录入 {shown}")
+
+        for name, op, expr in mods:
+            current = dice_pc.get_attr(scope, uid, name)
+            if current is None:
+                lines.append(f"「{name}」还没录入，先用 .st {name}10 录入")
+                continue
+            delta = self._st_value(expr, uid)
+            if delta is None:
+                lines.append(f"看不懂增减量「{expr}」")
+                continue
+            new_value = max(0, current + delta if op == "+" else current - delta)
+            dice_pc.set_attrs(scope, uid, {name: new_value})
+            lines.append(f"{name}：{current} {op} {delta} → {new_value}")
+
+        if not lines:
+            if unknown:
+                return (f"看不懂「{' '.join(unknown)}」，"
+                        "写法如 .st 力量50 敏捷60 / .st hp-1d3")
+            return "没有识别到属性，写法如 .st 力量50 敏捷60，查看用 .st show"
+
+        # 没被识别的部分要说出来，不能静默丢掉
+        tail = f"\n（这部分没看懂，跳过了：{' '.join(unknown)}）" if unknown else ""
+        prefix = f"{who}——" if who else ""
+        return prefix + "；".join(lines) + tail
+
+    # =================== COC 技能检定（.ra） ===================
+    def _ra_run(self, ra_text: str, umo: str, platform_uid: str, ra_name: str) -> str:
+        """
+        技能检定。没写技能值时会去人物卡里查。
+
+        .ra          → 纯掷骰，只回点数
+        .ra 侦查     → 查卡取侦查值
+        .ra 侦查60   → 直接用 60 判定
+        """
+        ra_parsed = parse_ra(ra_text)
+        skill_name = ra_parsed["skill_name"]
+        skill_val = ra_parsed["skill_value"]
+
+        # 群和用户都先归一化，保证两个 bot 读的是同一张卡
+        scope = self._group_key(umo)
+        uid = self._user_key(platform_uid)
+
+        # 没写数值就从人物卡取
+        if skill_val <= 0 and skill_name and uid:
+            card_val = dice_pc.get_attr(scope, uid, skill_name)
+            if card_val is not None:
+                skill_val = card_val
+
+        roll = self.dice_roller.roll(100, user_id=uid or "_anonymous")
+        roll_val = roll["total"]
+
+        # 没指定技能 → 纯掷骰
+        if skill_val <= 0 and not skill_name:
+            return str(roll_val)
+
+        # 指定了技能但卡里没有 → 提示先录入
+        if skill_val <= 0:
+            return f"没有找到「{skill_name}」的值，先用 .st {skill_name}50 录入吧。"
+
+        judgment = judge_coc7th(roll_val, skill_val)
+        return format_ra_reply(
+            judgment, roll_val, skill_val, skill_name, ra_name, self.ra_replies
+        )
+
     # =================== on_message（互通+签到+表情包） ===================
     @plugin_filter.event_message_type(EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):
@@ -314,13 +607,15 @@ class ZerasosPlugin(Star):
         if text and text[0] in ('.', '。', '/'):
             raw = text[1:].strip()
             lower = raw.lower()
+            # 骰面设置也按归一化后的群/用户存，否则两个 bot 各存一份
+            gkey, ukey = self._group_key(umo), self._user_key(platform_uid)
 
             # ── .dice set <面数> ──
             if re.match(r"^dice set\s+\d+\s*$", lower) or re.match(r"^骰子 set\s+\d+\s*$", lower):
                 parts = raw.split()
                 if len(parts) >= 3 and parts[2].isdigit():
                     val = int(parts[2])
-                    if set_dice(umo, platform_uid or "", val):
+                    if set_dice(gkey, ukey, val):
                         yield event.plain_result(f"已设置当前骰子为 D{val}")
                     else:
                         ok_vals = "/".join(str(v) for v in valid_dice_list())
@@ -331,29 +626,31 @@ class ZerasosPlugin(Star):
 
             # ── .dice（查看当前骰子） ──
             if lower in ("dice", "骰子"):
-                current = get_dice(umo, platform_uid or "")
+                current = get_dice(gkey, ukey)
                 yield event.plain_result(f"当前骰子：D{current}")
                 return
 
-            # ── .ra 技能检定 ──
+            # ── .ra 技能检定（技能值缺省时从人物卡取） ──
             if re.match(r"^ra", lower):
                 ra_text = raw[2:].strip() if len(raw) > 2 else ""
-                ra_parsed = parse_ra(ra_text)
-                # 获取用户名
                 try:
                     ra_name = event.message_obj.sender.nickname or platform_uid[:8]
                 except Exception:
                     ra_name = platform_uid[:8] if platform_uid else ""
-                roll = self.dice_roller.roll(100, user_id=platform_uid or "_anonymous")
-                roll_val = roll["total"]
-                skill_val = ra_parsed["skill_value"]
-                judgment = judge_coc7th(roll_val, skill_val)
-                reply = format_ra_reply(
-                    judgment, roll_val, skill_val,
-                    ra_parsed["skill_name"], ra_name,
-                    self.ra_replies,
+                yield event.plain_result(
+                    self._ra_run(ra_text, umo, platform_uid, ra_name)
                 )
-                yield event.plain_result(reply)
+                event.stop_event()
+                return
+
+            # ── .st 人物卡属性（st 后面不能跟英文字母，避免误吃 status 之类的词） ──
+            if re.match(r"^st(?![a-zA-Z])", lower):
+                st_text = raw[2:].strip() if len(raw) > 2 else ""
+                sender = event.get_sender_name() or ""
+                yield event.plain_result(
+                    self._st_run(st_text, umo, platform_uid, sender)
+                )
+                event.stop_event()
                 return
 
             # ── .coc / 。coc — COC7th 角色卡 ──
@@ -384,21 +681,27 @@ class ZerasosPlugin(Star):
                 yield event.plain_result(self._format_card_table(cards))
                 return
 
+            # ── .rhbind 暗骰私聊绑定（必须排在 .rh 前面，否则会被当成暗骰吃掉） ──
+            if lower in ("rhbind", "暗骰绑定"):
+                yield event.plain_result(
+                    self._rhbind_run(umo, platform_uid, bool(event.get_group_id()))
+                )
+                event.stop_event()
+                return
+
+            # ── .rh 暗骰（结果私聊，群内只提示一句） ──
+            hidden_expr = split_hidden(raw)
+            if hidden_expr is not None:
+                async for r in self._hidden_roll(event, hidden_expr, umo, platform_uid):
+                    yield r
+                event.stop_event()
+                return
+
             # ── .r / .rd 掷骰（严格匹配，无多余文本） ──
             parsed = parse_dice(raw)
             if parsed or lower in ('r', 'rd', 'R', 'RD'):
-                user_id = platform_uid or "_anonymous"
-                sides = parsed["sides"] if parsed else get_dice(umo, user_id)
-                count = parsed["count"] if parsed else 1
-                modifier = parsed["modifier"] if parsed else 0
-                result = self.dice_roller.roll(
-                    sides=sides,
-                    count=count,
-                    modifier=modifier,
-                    user_id=user_id,
-                )
-                reply = make_dice_reply(result, self.dice_reply_rd)
-                yield event.plain_result(reply)
+                yield event.plain_result(self._roll_text(raw, umo, platform_uid))
+                event.stop_event()
                 return
 
         # ════════════════════════════════════════════════════
@@ -414,6 +717,40 @@ class ZerasosPlugin(Star):
                     yield event.plain_result(f"已绑定本群到 QQ 群 {group_num}")
                 else:
                     yield event.plain_result("绑定失败。")
+                return
+
+        # ════════════════════════════════════════════════════
+        # 暗骰私聊绑定：@bot 绑定私聊 <短码>
+        # 目的是让 .rh 的结果能真的送到私聊——群消息里只有 member_openid，
+        # 拿不到单聊投递需要的 user_openid，只能让用户自己牵一次线
+        # ════════════════════════════════════════════════════
+        if event.is_at_or_wake_command and platform_uid:
+            clean = re.sub(r"^\[At:\S+\]\s*", "", text).strip()
+            m_bindp = re.match(r"^/?\s*绑定私聊\s*(\S*)\s*$", clean)
+            if m_bindp:
+                arg = m_bindp.group(1).strip()
+                gkey, ukey = self._group_key(umo), self._user_key(platform_uid)
+                if not arg:
+                    has = bool(dice_rh.get_link(gkey, ukey))
+                    yield event.plain_result(
+                        "已绑定暗骰私聊投递，`.rh` 结果会私聊发给你。"
+                        "（发「绑定私聊 解除」可解除）" if has else
+                        "还没绑定。私聊我发 .rhbind 拿短码，再回来发「绑定私聊 <短码>」。"
+                    )
+                elif arg in ("解除", "取消", "unbind"):
+                    if dice_rh.unlink(gkey, ukey):
+                        yield event.plain_result("已解除暗骰私聊绑定。")
+                    else:
+                        yield event.plain_result("本来就没有绑定。")
+                else:
+                    target = dice_rh.redeem_code(arg)
+                    if target:
+                        dice_rh.link(gkey, ukey, target)
+                        yield event.plain_result("绑定成功，之后 `.rh` 的结果会私聊发给你。")
+                    else:
+                        yield event.plain_result(
+                            "短码无效或已过期。去私聊我发 .rhbind 重新拿一个吧。"
+                        )
                 return
 
         # ════════════════════════════════════════════════════
@@ -998,49 +1335,83 @@ class ZerasosPlugin(Star):
             yield r
         event.stop_event()
 
-    @command("r")
-    async def r_cmd(self, event: AstrMessageEvent):
-        """掷骰 .r / .rd"""
-        text = event.message_str.strip()
-        # 去掉 /r 或 /rd 前缀，取出表达式
-        expr = re.sub(r"^\[At:\S+\]\s*", "", text).strip()
-        expr = re.sub(r"^/r[d]?\s*", "", expr, flags=re.IGNORECASE).strip()
+    @staticmethod
+    def _strip_cmd(text: str, cmd: str) -> str:
+        """
+        剥掉消息开头的 @ 残留、唤醒前缀和命令词，返回纯参数部分。
 
-        # 获取 user_id（从 event 取）
+        注意 AstrBot 的两个阶段叠加效果：
+          - waking_check 会把 wake_prefix（默认 `/`）从 message_str 里剪掉
+          - CommandFilter 只按命令词比对，不含前缀
+        所以处理函数里拿到的是 "ra 侦查" 而不是 "/ra 侦查"。
+        之前的写法一律去剥 "/ra"，对不上，参数就被整条留了下来。
+        这里仍然容忍前缀还在的情况，免得哪天配置变了就出问题。
+        """
+        t = re.sub(r"^\[At:\S+\]\s*", "", (text or "").strip()).strip()
+        # 用 (?![A-Za-z]) 而不是 \b：命令词后面直接跟数字也要能剥掉，
+        # 同时避免把 "status" 这类词误当成 "st" + 参数
+        return re.sub(rf"^[.。!/！]*\s*{re.escape(cmd)}(?![A-Za-z])\s*", "", t,
+                      flags=re.IGNORECASE).strip()
+
+    async def _command_roll(self, event: AstrMessageEvent):
+        """@command 路由下的掷骰 / 暗骰统一入口。"""
+        text = event.message_str.strip()
+        expr = re.sub(r"^\[At:\S+\]\s*", "", text).strip()
+        # 只剥掉行首标点，保留 r / rd / rh 命令词本身（parse_dice 依赖它）
+        expr = re.sub(r"^[.。!/！]+\s*", "", expr).strip()
+
         try:
             platform_uid = str(event.message_obj.sender.user_id)
         except Exception:
             platform_uid = ""
         umo = getattr(event, 'unified_msg_origin', '')
 
-        parsed = parse_dice(expr)
-        user_id = platform_uid or "_anonymous"
-        sides = parsed["sides"] if parsed else get_dice(umo, user_id)
-        count = parsed["count"] if parsed else 1
-        modifier = parsed["modifier"] if parsed else 0
-        result = self.dice_roller.roll(
-            sides=sides,
-            count=count,
-            modifier=modifier,
-            user_id=user_id,
-        )
-        reply = make_dice_reply(result, self.dice_reply_rd)
-        yield event.plain_result(reply)
+        hidden_expr = split_hidden(expr)
+        if hidden_expr is not None:
+            async for r in self._hidden_roll(event, hidden_expr, umo, platform_uid):
+                yield r
+        else:
+            yield event.plain_result(self._roll_text(expr, umo, platform_uid))
         event.stop_event()
+
+    @command("r")
+    async def r_cmd(self, event: AstrMessageEvent):
+        """掷骰 /r"""
+        async for r in self._command_roll(event):
+            yield r
 
     @command("rd")
     async def rd_cmd(self, event: AstrMessageEvent):
         """掷骰（/rd 别名）"""
-        async for r in self.r_cmd(event):
+        async for r in self._command_roll(event):
             yield r
+
+    @command("rh")
+    async def rh_cmd(self, event: AstrMessageEvent):
+        """暗骰（结果私聊发送）"""
+        async for r in self._command_roll(event):
+            yield r
+
+    @command("rhbind")
+    async def rhbind_cmd(self, event: AstrMessageEvent):
+        """暗骰私聊绑定：私聊里发拿短码，群里发看状态"""
+        try:
+            platform_uid = str(event.message_obj.sender.user_id)
+        except Exception:
+            platform_uid = ""
+        umo = getattr(event, 'unified_msg_origin', '')
+        yield event.plain_result(
+            self._rhbind_run(umo, platform_uid, bool(event.get_group_id()))
+        )
+        event.stop_event()
 
     @command("ra")
     async def ra_cmd(self, event: AstrMessageEvent):
         """COC 技能检定"""
         text = event.message_str.strip()
         clean = re.sub(r"^\[At:\S+\]\s*", "", text).strip()
-        # 去掉 /ra 前缀
-        ra_expr = re.sub(r"^/ra\s*", "", clean, flags=re.IGNORECASE).strip()
+        # 剥掉命令词，取参数（前缀 AstrBot 已经处理掉了）
+        ra_expr = self._strip_cmd(clean, "ra")
 
         try:
             platform_uid = str(event.message_obj.sender.user_id)
@@ -1048,21 +1419,31 @@ class ZerasosPlugin(Star):
             platform_uid = ""
         umo = getattr(event, 'unified_msg_origin', '')
 
-        ra_parsed = parse_ra(ra_expr)
         try:
             ra_name = event.message_obj.sender.nickname or platform_uid[:8]
         except Exception:
             ra_name = platform_uid[:8] if platform_uid else ""
-        roll = self.dice_roller.roll(100, user_id=platform_uid or "_anonymous")
-        roll_val = roll["total"]
-        skill_val = ra_parsed["skill_value"]
-        judgment = judge_coc7th(roll_val, skill_val)
-        reply = format_ra_reply(
-            judgment, roll_val, skill_val,
-            ra_parsed["skill_name"], ra_name,
-            self.ra_replies,
+
+        yield event.plain_result(self._ra_run(ra_expr, umo, platform_uid, ra_name))
+        event.stop_event()
+
+    @command("st")
+    async def st_cmd(self, event: AstrMessageEvent):
+        """人物卡属性（录入 / 查看 / 增减 / 删除 / 清空）"""
+        text = event.message_str.strip()
+        clean = re.sub(r"^\[At:\S+\]\s*", "", text).strip()
+        # 剥掉命令词，取参数
+        st_text = self._strip_cmd(clean, "st")
+
+        try:
+            platform_uid = str(event.message_obj.sender.user_id)
+        except Exception:
+            platform_uid = ""
+        umo = getattr(event, 'unified_msg_origin', '')
+
+        yield event.plain_result(
+            self._st_run(st_text, umo, platform_uid, event.get_sender_name() or "")
         )
-        yield event.plain_result(reply)
         event.stop_event()
 
     @command("dice")
@@ -1070,8 +1451,8 @@ class ZerasosPlugin(Star):
         """查看/设置默认骰子"""
         text = event.message_str.strip()
         clean = re.sub(r"^\[At:\S+\]\s*", "", text).strip()
-        # 去掉 /dice 前缀
-        args = re.sub(r"^/dice\s*", "", clean, flags=re.IGNORECASE).strip()
+        # 剥掉命令词，取参数
+        args = self._strip_cmd(clean, "dice")
 
         try:
             platform_uid = str(event.message_obj.sender.user_id)
@@ -1080,16 +1461,17 @@ class ZerasosPlugin(Star):
         umo = getattr(event, 'unified_msg_origin', '')
 
         # /dice set <面数>
+        gkey, ukey = self._group_key(umo), self._user_key(platform_uid)
         m = re.match(r"^set\s+(\d+)$", args, re.IGNORECASE)
         if m:
             val = int(m.group(1))
-            if set_dice(umo, platform_uid or "", val):
+            if set_dice(gkey, ukey, val):
                 yield event.plain_result(f"已设置当前骰子为 D{val}")
             else:
                 ok_vals = "/".join(str(v) for v in valid_dice_list())
                 yield event.plain_result(f"不支持的骰子，支持的骰子：{ok_vals}")
         else:
-            current = get_dice(umo, platform_uid or "")
+            current = get_dice(gkey, ukey)
             yield event.plain_result(f"当前骰子：D{current}")
         event.stop_event()
 
@@ -1098,7 +1480,7 @@ class ZerasosPlugin(Star):
         """生成 DND 5e 角色卡"""
         text = event.message_str.strip()
         clean = re.sub(r"^\[At:\S+\]\s*", "", text).strip()
-        count_str = re.sub(r"^/dnd\s*", "", clean, flags=re.IGNORECASE).strip()
+        count_str = self._strip_cmd(clean, "dnd")
         count = int(count_str) if count_str.isdigit() else 1
         count = min(count, 10)
         cards = [format_dnd_char(roll_dnd(), i+1) for i in range(count)]
