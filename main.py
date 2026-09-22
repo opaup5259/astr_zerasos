@@ -61,7 +61,7 @@ except Exception:
     _FRIEND_SESSION_TYPE = "FriendMessage"
 
 
-@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+互通+骰子+番茄+表情包", "2.0301")
+@register("zerasos_bot", "opaup", "泽拉索斯 —— 签到+互通+骰子+番茄+表情包", "2.0302")
 class ZerasosPlugin(Star):
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
@@ -423,21 +423,30 @@ class ZerasosPlugin(Star):
         )
         return result["total"]
 
+    @staticmethod
+    def _clip(text: str, limit: int = 40) -> str:
+        """截断回显，别把用户贴的整张卡原样丢回去。"""
+        t = (text or "").strip()
+        return t if len(t) <= limit else t[:limit] + f"…（共 {len(t)} 字）"
+
     def _st_show(self, scope: str, uid: str, who: str, rest: str) -> str:
         """查看人物卡。rest 为空或 all 时显示全部，否则只显示指定项。"""
         attrs = dice_pc.get_all(scope, uid)
         if not attrs:
             return f"{who}还没有人物卡，用 .st 力量50 敏捷60 来录入吧。"
 
+        card_name = dice_pc.get_name(scope, uid)
+        title = f"{card_name}（{who}）" if card_name else who
+
         if rest and rest.lower() != "all":
             parts = []
             for name in rest.split():
                 key = dice_pc.normalize_attr_name(name)
                 parts.append(f"{key}:{attrs[key]}" if key in attrs else f"{key}:未录入")
-            return f"{who}的属性：" + " ".join(parts)
+            return f"{title}的属性：" + " ".join(parts)
 
         items = " ".join(f"{k}:{v}" for k, v in attrs.items())
-        return f"{who}的人物卡（共 {len(attrs)} 项）：\n{items}"
+        return f"{title}的人物卡（共 {len(attrs)} 项）：\n{items}"
 
     def _st_run(self, text: str, umo: str, platform_uid: str, sender_name: str) -> str:
         """执行 .st 指令，返回回复文本。"""
@@ -474,14 +483,23 @@ class ZerasosPlugin(Star):
                 return "没有找到要删除的属性。"
             return f"已删除：{'、'.join(removed)}"
 
+        # 角色名前缀：.st<角色名>-<属性...>
+        card_name, body = dice_pc.split_card_name(t)
+        if card_name:
+            dice_pc.set_name(scope, uid, card_name)
+            t = body
+
         # 录入 / 增减，支持混写（.st 体力13 侦查-5）
         assigns, mods, unknown = dice_pc.parse_st_tokens(t)
         lines = []
 
         if assigns:
             dice_pc.set_attrs(scope, uid, assigns)
-            shown = " ".join(f"{k}:{v}" for k, v in assigns.items())
-            lines.append(f"已录入 {shown}")
+            # 整张卡可能有上百项，逐条列出来会把消息撑爆
+            if len(assigns) > 8:
+                lines.append(f"已录入 {len(assigns)} 项属性")
+            else:
+                lines.append("已录入 " + " ".join(f"{k}:{v}" for k, v in assigns.items()))
 
         for name, op, expr in mods:
             current = dice_pc.get_attr(scope, uid, name)
@@ -490,7 +508,7 @@ class ZerasosPlugin(Star):
                 continue
             delta = self._st_value(expr, uid)
             if delta is None:
-                lines.append(f"看不懂增减量「{expr}」")
+                lines.append(f"看不懂增减量「{self._clip(expr, 20)}」")
                 continue
             new_value = max(0, current + delta if op == "+" else current - delta)
             dice_pc.set_attrs(scope, uid, {name: new_value})
@@ -498,13 +516,17 @@ class ZerasosPlugin(Star):
 
         if not lines:
             if unknown:
-                return (f"看不懂「{' '.join(unknown)}」，"
+                return (f"看不懂「{self._clip(' '.join(unknown))}」，"
                         "写法如 .st 力量50 敏捷60 / .st hp-1d3")
             return "没有识别到属性，写法如 .st 力量50 敏捷60，查看用 .st show"
 
+        head = f"{card_name}（{who}）" if card_name else who
+        prefix = f"{head}——" if head else ""
+
         # 没被识别的部分要说出来，不能静默丢掉
-        tail = f"\n（这部分没看懂，跳过了：{' '.join(unknown)}）" if unknown else ""
-        prefix = f"{who}——" if who else ""
+        tail = ""
+        if unknown:
+            tail = f"\n（这部分没看懂，跳过了：{self._clip(' '.join(unknown))}）"
         return prefix + "；".join(lines) + tail
 
     # =================== COC 技能检定（.ra） ===================
@@ -648,7 +670,7 @@ class ZerasosPlugin(Star):
                 st_text = raw[2:].strip() if len(raw) > 2 else ""
                 sender = event.get_sender_name() or ""
                 yield event.plain_result(
-                    self._st_run(st_text, umo, platform_uid, sender)
+                    self._br_text(self._st_run(st_text, umo, platform_uid, sender))
                 )
                 event.stop_event()
                 return
@@ -1442,7 +1464,7 @@ class ZerasosPlugin(Star):
         umo = getattr(event, 'unified_msg_origin', '')
 
         yield event.plain_result(
-            self._st_run(st_text, umo, platform_uid, event.get_sender_name() or "")
+            self._br_text(self._st_run(st_text, umo, platform_uid, event.get_sender_name() or ""))
         )
         event.stop_event()
 
